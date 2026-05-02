@@ -1,0 +1,41 @@
+name: Focus OS Assistant
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron is UTC. These two schedules cover Eastern daylight and
+    # standard time; the app route only runs at the configured local hours.
+    - cron: "0 2,10,14,18,22 * * *"
+    - cron: "0 3,11,15,19,23 * * *"
+
+jobs:
+  run-assistant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger assistant
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FOCUS_OS_ASSISTANT_URL: ${{ vars.FOCUS_OS_ASSISTANT_URL || 'https://focus-os-neon.vercel.app/api/assistant/run' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing CRON_SECRET GitHub secret."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          status_code="$(
+            curl --silent --show-error \
+              --request GET \
+              --header "Authorization: Bearer $CRON_SECRET" \
+              --output "$response_file" \
+              --write-out "%{http_code}" \
+              "$FOCUS_OS_ASSISTANT_URL"
+          )"
+
+          echo "HTTP $status_code"
+          cat "$response_file"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            exit 1
+          fi
