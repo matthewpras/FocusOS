@@ -1,65 +1,126 @@
-import Image from "next/image";
+"use client"
+
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { AppShell } from "@/components/app-shell"
+import { AssistantSummaryCard } from "@/components/assistant-summary-card"
+import { BentoTile } from "@/components/bento-tile"
+import { PageHeader } from "@/components/page-header"
+import { CaptureInboxWidget } from "@/components/widgets/CaptureInboxWidget"
+import { HabitsTodayWidget } from "@/components/widgets/HabitsTodayWidget"
+import { TasksTodayWidget } from "@/components/widgets/TasksTodayWidget"
+import { useAssistant } from "@/hooks/useAssistant"
+import { useAuth } from "@/hooks/use-auth"
+import { useCaptures } from "@/hooks/useCaptures"
+import { useHabits } from "@/hooks/useHabits"
+import { useTasks } from "@/hooks/useTasks"
+import { useTileOrder } from "@/hooks/useTileOrder"
+
+function SortableTile({
+  id,
+  children,
+  className,
+}: {
+  id: string
+  children: React.ReactNode
+  className?: string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={className}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  )
+}
 
 export default function Home() {
+  const { user, session } = useAuth()
+  const tasks = useTasks(user?.id)
+  const habits = useHabits(user?.id)
+  const captures = useCaptures(user?.id)
+  const assistant = useAssistant(user?.id, session?.access_token)
+  const { order, setOrder } = useTileOrder()
+  const sensors = useSensors(useSensor(PointerSensor))
+
+  function onDragEnd(event: DragEndEvent) {
+    if (!event.over || event.active.id === event.over.id) return
+    const oldIndex = order.indexOf(String(event.active.id))
+    const newIndex = order.indexOf(String(event.over.id))
+    setOrder(arrayMove(order, oldIndex, newIndex))
+  }
+
+  const tiles = {
+    tasks: (
+      <SortableTile key="tasks" id="tasks" className="lg:col-span-8">
+        <BentoTile title="Tasks Today" eyebrow="Now" glow="blue">
+          <TasksTodayWidget
+            tasks={tasks.tasks}
+            onToggle={(task) => tasks.updateTask(task.id, { completed: true })}
+          />
+        </BentoTile>
+      </SortableTile>
+    ),
+    habits: (
+      <SortableTile key="habits" id="habits" className="lg:col-span-4">
+        <BentoTile title="Habits Today" eyebrow="Streaks" glow="violet">
+          <HabitsTodayWidget
+            habits={habits.habits}
+            onToggle={habits.toggleHabit}
+          />
+        </BentoTile>
+      </SortableTile>
+    ),
+    capture: (
+      <SortableTile key="capture" id="capture" className="lg:col-span-4">
+        <BentoTile title="Capture Inbox" eyebrow="Thoughts" glow="blue">
+          <CaptureInboxWidget captures={captures.captures} />
+        </BentoTile>
+      </SortableTile>
+    ),
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    <AppShell>
+      <PageHeader
+        title="Command center"
+        detail="Today, habits, and loose thoughts in one quiet workspace."
+      />
+      <AssistantSummaryCard
+        brief={assistant.brief}
+        latestRun={assistant.latestRun}
+        sourceState={assistant.sourceState}
+        loading={assistant.loading}
+        running={assistant.running}
+        error={assistant.error}
+        onRunNow={assistant.runNow}
+      />
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <SortableContext items={order} strategy={rectSortingStrategy}>
+          <div className="grid gap-4 lg:grid-cols-12">
+            {order.map((id) => tiles[id as keyof typeof tiles])}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </AppShell>
+  )
 }

@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Focus OS
 
-## Getting Started
+Private personal productivity app: tasks, habits, and quick capture.
 
-First, run the development server:
+## Local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Create a new Supabase project.
+2. Open SQL Editor.
+3. Run `schema.sql`.
+4. In Authentication > URL Configuration, add:
+   - Local: `http://localhost:3000/auth/callback`
+   - Vercel: `https://YOUR_VERCEL_URL/auth/callback`
+5. Set environment variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+NEXT_PUBLIC_APP_URL=https://YOUR_VERCEL_URL
+NEXT_PUBLIC_ALLOWED_EMAILS=you@example.com
+```
 
-## Learn More
+`NEXT_PUBLIC_ALLOWED_EMAILS` accepts comma-separated emails. Leave blank only during setup.
 
-To learn more about Next.js, take a look at the following resources:
+Assistant automation env:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+CRON_SECRET=YOUR_LONG_RANDOM_SECRET
+ASSISTANT_USER_EMAIL=you@example.com
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+GOOGLE_REFRESH_TOKEN=YOUR_GOOGLE_REFRESH_TOKEN
+GOOGLE_CALENDAR_ID=primary
+GOOGLE_GMAIL_QUERY=newer_than:2d (is:important OR label:starred OR category:primary)
+GOOGLE_TIMEZONE=America/New_York
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Private Deployment
 
-## Deploy on Vercel
+Recommended setup:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Vercel production or preview URL
+- Supabase magic-link auth
+- `NEXT_PUBLIC_ALLOWED_EMAILS` set to your email
+- No Vercel password protection, so iPhone has no extra prompt
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deploy:
+
+```bash
+npx vercel login
+npx vercel deploy --prod
+```
+
+After deploy, set same env vars in Vercel project settings, then redeploy.
+
+## Assistant Automation
+
+- Home includes assistant summary card with latest brief, priorities, focus block, risks, and manual run button.
+- `GET /api/assistant/run` is external scheduler target. Route only executes during `6 AM / 10 AM / 2 PM / 6 PM / 10 PM` Eastern.
+- `POST /api/assistant/run` runs assistant manually for signed-in allowed user.
+- Before first run, apply updated `schema.sql`, add env vars above, and add `CRON_SECRET` in Vercel project settings.
+- Vercel Hobby cron only supports daily cadence, so use GitHub Actions or another external scheduler for 4-hour automation.
+- Scheduler request:
+
+```txt
+GET https://focus-os-neon.vercel.app/api/assistant/run
+Authorization: Bearer YOUR_CRON_SECRET
+```
+
+- Recommended schedule: `0 6,10,14,18,22 * * *` in `America/New_York`.
+- GitHub Actions workflow lives at `.github/workflows/focusos-assistant.yml`.
+- Add GitHub repository secret `CRON_SECRET` with the same value as Vercel `CRON_SECRET`.
+- Optional GitHub repository variable `FOCUS_OS_ASSISTANT_URL` can override the production endpoint.
