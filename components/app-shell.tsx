@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { CaptureFAB } from "@/components/capture-fab"
 import { CaptureModal } from "@/components/capture-modal"
@@ -9,21 +9,46 @@ import { MobileNav } from "@/components/mobile-nav"
 import { SetupNotice } from "@/components/setup-notice"
 import { useAuth } from "@/hooks/use-auth"
 import { useCaptures } from "@/hooks/useCaptures"
-import { isEmailAllowed } from "@/lib/allowlist"
 import { hasSupabaseEnv } from "@/lib/supabase-browser"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, loading, signOut } = useAuth()
+  const { user, session, loading, signOut } = useAuth()
   const captures = useCaptures(user?.id)
   const router = useRouter()
   const configured = hasSupabaseEnv()
-  const allowed = isEmailAllowed(user?.email)
+  const [accessAllowed, setAccessAllowed] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (configured && !loading && !user) router.replace("/sign-in")
   }, [configured, loading, router, user])
 
-  if (loading) {
+  useEffect(() => {
+    let cancelled = false
+
+    async function verifyAccess() {
+      if (!configured || !user || !session?.access_token) {
+        if (!cancelled) setAccessAllowed(null)
+        return
+      }
+
+      const response = await fetch("/api/auth/allowed", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (cancelled) return
+      setAccessAllowed(response.ok)
+    }
+
+    void verifyAccess()
+
+    return () => {
+      cancelled = true
+    }
+  }, [configured, session?.access_token, user])
+
+  if (loading || (configured && user && accessAllowed === null)) {
     return (
       <main className="grid min-h-screen place-items-center bg-background text-white">
         <div className="h-2 w-40 overflow-hidden rounded-full bg-white/10">
@@ -35,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (configured && !user) return null
 
-  if (configured && user && !allowed) {
+  if (configured && user && accessAllowed === false) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 text-white">
         <section className="w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 text-center backdrop-blur-xl">
@@ -63,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           inboxCount={captures.captures.length}
           onSignOut={() => signOut()?.then(() => router.replace("/sign-in"))}
         />
-        <main className="min-h-screen flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10">
+        <main className="min-h-screen flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-5 sm:px-6 lg:px-8 lg:pb-10">
           <div className="mx-auto max-w-6xl space-y-6">
             <SetupNotice />
             {children}

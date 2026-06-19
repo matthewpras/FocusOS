@@ -1,9 +1,16 @@
 "use client"
 
 import { formatDistanceToNow } from "date-fns"
-import { Bot, CalendarClock, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import {
+  BookOpenText,
+  Bot,
+  CalendarClock,
+  LoaderCircle,
+  RefreshCw,
+  TriangleAlert,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import type { AssistantBrief, AssistantRun, AssistantSourceState } from "@/types"
 
 function toneForStatus(status: string | undefined) {
@@ -19,16 +26,24 @@ export function AssistantSummaryCard({
   sourceState,
   loading,
   running,
+  syncingBrief,
   error,
+  obsidianError,
+  lastSyncedPath,
   onRunNow,
+  onSyncBrief,
 }: {
   brief: AssistantBrief | null
   latestRun: AssistantRun | null
   sourceState: AssistantSourceState | null
   loading: boolean
   running: boolean
+  syncingBrief?: boolean
   error: string | null
+  obsidianError?: string | null
+  lastSyncedPath?: string | null
   onRunNow: () => void
+  onSyncBrief?: () => void
 }) {
   const status = latestRun?.status ?? sourceState?.status ?? "idle"
   const lastRunAt = latestRun?.started_at ?? sourceState?.last_attempted_run_at
@@ -57,13 +72,32 @@ export function AssistantSummaryCard({
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={toneForStatus(status)}>{status.replace("_", " ")}</Badge>
+            {onSyncBrief ? (
+              <Button
+                variant="secondary"
+                className="gap-2"
+                disabled={Boolean(syncingBrief) || running || loading}
+                onClick={onSyncBrief}
+              >
+                {syncingBrief ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <BookOpenText className="size-4" />
+                )}
+                Sync to Obsidian
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               className="gap-2"
               disabled={running || loading}
               onClick={onRunNow}
             >
-              {running ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              {running ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
               Run now
             </Button>
           </div>
@@ -73,14 +107,14 @@ export function AssistantSummaryCard({
           <div className="rounded-xl border border-white/[0.07] bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.24em] text-white/45">Top priorities</p>
             <div className="mt-3 space-y-2">
-              {(brief?.top_priorities?.length ? brief.top_priorities : ["Assistant will rank priorities after first sync."]).map(
-                (item, index) => (
-                  <div key={`${item}-${index}`} className="flex gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-sm text-white/80">
-                    <span className="text-white/35">{index + 1}</span>
-                    <span>{item}</span>
-                  </div>
-                ),
-              )}
+              {(brief?.top_priorities?.length
+                ? brief.top_priorities
+                : ["Assistant will rank priorities after first sync."]).map((item, index) => (
+                <div key={`${item}-${index}`} className="flex gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-sm text-white/80">
+                  <span className="text-white/35">{index + 1}</span>
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -103,11 +137,14 @@ export function AssistantSummaryCard({
             <p className="mt-2 text-sm text-white/55">
               Next window: 6 AM, 10 AM, 2 PM, 6 PM, 10 PM Eastern.
             </p>
-            {sourceState?.error_text || error ? (
+            {sourceState?.error_text || error || obsidianError ? (
               <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-100">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                <span>{error ?? sourceState?.error_text}</span>
+                <span>{error ?? obsidianError ?? sourceState?.error_text}</span>
               </div>
+            ) : null}
+            {lastSyncedPath ? (
+              <p className="mt-3 text-xs text-white/45">Last vault sync: {lastSyncedPath}</p>
             ) : null}
           </div>
         </div>
@@ -116,13 +153,13 @@ export function AssistantSummaryCard({
           <div className="rounded-xl border border-white/[0.07] bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.24em] text-white/45">Next actions</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {(brief?.next_actions?.length ? brief.next_actions : ["First run will publish next actions here."]).map(
-                (item, index) => (
-                  <Badge key={`${item}-${index}`} className="bg-white/[0.08] text-white/75">
-                    {item}
-                  </Badge>
-                ),
-              )}
+              {(brief?.next_actions?.length
+                ? brief.next_actions
+                : ["First run will publish next actions here."]).map((item, index) => (
+                <Badge key={`${item}-${index}`} className="bg-white/[0.08] text-white/75">
+                  {item}
+                </Badge>
+              ))}
             </div>
           </div>
 

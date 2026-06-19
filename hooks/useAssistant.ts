@@ -58,6 +58,54 @@ export function useAssistant(userId?: string, accessToken?: string) {
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!supabase || !userId) return
+
+    const channel = supabase
+      .channel(`assistant-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "assistant_briefs",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "assistant_runs",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "assistant_source_states",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [refresh, supabase, userId])
+
   async function runNow() {
     if (!accessToken) {
       setError("Sign in again before running assistant.")

@@ -35,6 +35,30 @@ export function useTasks(userId?: string) {
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!supabase || !userId) return
+
+    const channel = supabase
+      .channel(`tasks-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [refresh, supabase, userId])
+
   async function addTask(input: NewTaskInput) {
     if (!supabase || !userId || !input.text.trim()) return
     await supabase.from("tasks").insert({

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  CalendarDays,
   CheckSquare,
   Flame,
   Inbox,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils"
 const nav = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/habits", label: "Habits", icon: Flame },
   { href: "/capture", label: "Inbox", icon: Inbox },
 ]

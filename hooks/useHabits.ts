@@ -41,6 +41,42 @@ export function useHabits(userId?: string) {
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!supabase || !userId) return
+
+    const channel = supabase
+      .channel(`habits-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "habits",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "habit_logs",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [refresh, supabase, userId])
+
   async function addHabit(input: Pick<Habit, "name" | "icon" | "color">) {
     if (!supabase || !userId || !input.name.trim()) return
     await supabase.from("habits").insert({

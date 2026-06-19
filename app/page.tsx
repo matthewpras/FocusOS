@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { AppShell } from "@/components/app-shell"
 import { AssistantSummaryCard } from "@/components/assistant-summary-card"
 import { BentoTile } from "@/components/bento-tile"
+import { CalendarAgendaCard } from "@/components/calendar-agenda-card"
 import { PageHeader } from "@/components/page-header"
 import { CaptureInboxWidget } from "@/components/widgets/CaptureInboxWidget"
 import { HabitsTodayWidget } from "@/components/widgets/HabitsTodayWidget"
@@ -24,7 +25,10 @@ import { TasksTodayWidget } from "@/components/widgets/TasksTodayWidget"
 import { useAssistant } from "@/hooks/useAssistant"
 import { useAuth } from "@/hooks/use-auth"
 import { useCaptures } from "@/hooks/useCaptures"
+import { useExternalCommitments } from "@/hooks/useExternalCommitments"
 import { useHabits } from "@/hooks/useHabits"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useObsidianSync } from "@/hooks/useObsidianSync"
 import { useTasks } from "@/hooks/useTasks"
 import { useTileOrder } from "@/hooks/useTileOrder"
 
@@ -59,8 +63,13 @@ export default function Home() {
   const habits = useHabits(user?.id)
   const captures = useCaptures(user?.id)
   const assistant = useAssistant(user?.id, session?.access_token)
+  const commitments = useExternalCommitments(user?.id)
+  const obsidian = useObsidianSync(session?.access_token)
   const { order, setOrder } = useTileOrder()
-  const sensors = useSensors(useSensor(PointerSensor))
+  const isMobile = useIsMobile()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  )
 
   function onDragEnd(event: DragEndEvent) {
     if (!event.over || event.active.id === event.over.id) return
@@ -80,6 +89,14 @@ export default function Home() {
         </BentoTile>
       </SortableTile>
     ),
+    calendar: (
+      <SortableTile key="calendar" id="calendar" className="lg:col-span-4">
+        <CalendarAgendaCard
+          events={commitments.upcomingEvents}
+          inboxSignals={commitments.inboxSignals}
+        />
+      </SortableTile>
+    ),
     habits: (
       <SortableTile key="habits" id="habits" className="lg:col-span-4">
         <BentoTile title="Habits Today" eyebrow="Streaks" glow="violet">
@@ -91,7 +108,7 @@ export default function Home() {
       </SortableTile>
     ),
     capture: (
-      <SortableTile key="capture" id="capture" className="lg:col-span-4">
+      <SortableTile key="capture" id="capture" className="lg:col-span-8">
         <BentoTile title="Capture Inbox" eyebrow="Thoughts" glow="blue">
           <CaptureInboxWidget captures={captures.captures} />
         </BentoTile>
@@ -103,7 +120,7 @@ export default function Home() {
     <AppShell>
       <PageHeader
         title="Command center"
-        detail="Today, habits, and loose thoughts in one quiet workspace."
+        detail="Today, calendar, habits, and loose thoughts in one quiet workspace."
       />
       <AssistantSummaryCard
         brief={assistant.brief}
@@ -111,16 +128,26 @@ export default function Home() {
         sourceState={assistant.sourceState}
         loading={assistant.loading}
         running={assistant.running}
+        syncingBrief={obsidian.running === "brief"}
         error={assistant.error}
+        obsidianError={obsidian.error}
+        lastSyncedPath={obsidian.lastSyncedPath}
         onRunNow={assistant.runNow}
+        onSyncBrief={obsidian.syncBrief}
       />
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <SortableContext items={order} strategy={rectSortingStrategy}>
-          <div className="grid gap-4 lg:grid-cols-12">
-            {order.map((id) => tiles[id as keyof typeof tiles])}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {isMobile ? (
+        <div className="grid gap-4 lg:grid-cols-12">
+          {order.map((id) => tiles[id as keyof typeof tiles])}
+        </div>
+      ) : (
+        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+          <SortableContext items={order} strategy={rectSortingStrategy}>
+            <div className="grid gap-4 lg:grid-cols-12">
+              {order.map((id) => tiles[id as keyof typeof tiles])}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
     </AppShell>
   )
 }

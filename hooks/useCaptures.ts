@@ -28,6 +28,30 @@ export function useCaptures(userId?: string) {
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!supabase || !userId) return
+
+    const channel = supabase
+      .channel(`captures-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "captures",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [refresh, supabase, userId])
+
   async function addCapture(text: string) {
     if (!supabase || !userId || !text.trim()) return
     await supabase.from("captures").insert({ user_id: userId, text: text.trim() })

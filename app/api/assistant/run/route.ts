@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { runAssistant, shouldRunForSchedule } from "@/lib/assistant"
-import { getSupabaseServerAdmin, getSupabaseServerAuthClient } from "@/lib/supabase-server"
+import { getAllowedEmails } from "@/lib/allowlist"
+import { getBearerToken, verifyAccessToken } from "@/lib/server-auth"
+import { getSupabaseServerAdmin } from "@/lib/supabase-server"
 
 function resolveAutomationEmail() {
   return (
     process.env.ASSISTANT_USER_EMAIL ||
-    process.env.NEXT_PUBLIC_ALLOWED_EMAILS?.split(",").map((item) => item.trim())[0] ||
+    getAllowedEmails("server")[0] ||
     null
   )
-}
-
-async function resolveUserIdFromToken(token: string) {
-  const supabase = getSupabaseServerAuthClient()
-  if (!supabase) return null
-
-  const { data, error } = await supabase.auth.getUser(token)
-  if (error || !data.user) return null
-  return data.user.id
 }
 
 async function resolveCronUserId() {
@@ -34,10 +27,7 @@ async function resolveCronUserId() {
 }
 
 async function handleRun(request: NextRequest, trigger: "manual" | "cron") {
-  const authHeader = request.headers.get("authorization")
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length)
-    : null
+  const bearerToken = getBearerToken(request.headers.get("authorization"))
   const cronSecret = process.env.CRON_SECRET
   const isCron = Boolean(bearerToken && cronSecret && bearerToken === cronSecret)
 
@@ -55,7 +45,14 @@ async function handleRun(request: NextRequest, trigger: "manual" | "cron") {
 
     userId = await resolveCronUserId()
   } else if (bearerToken) {
-    userId = await resolveUserIdFromToken(bearerToken)
+    const verification = await verifyAccessToken(bearerToken)
+    if (!verification.ok) {
+      return NextResponse.json(
+        { ok: false, error: verification.error },
+        { status: verification.status },
+      )
+    }
+    userId = verification.user.id
   }
 
   if (!userId) {
