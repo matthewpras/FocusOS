@@ -4,12 +4,17 @@ import { useState } from "react"
 
 type SyncTarget = "capture" | "brief"
 
-export function useObsidianSync(accessToken?: string) {
+export function useObsidianSync(accessToken?: string, enabled = true) {
   const [running, setRunning] = useState<SyncTarget | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastSyncedPath, setLastSyncedPath] = useState<string | null>(null)
 
   async function sync(target: SyncTarget, captureId?: string) {
+    if (!enabled) {
+      setError("Obsidian export is disabled in this environment.")
+      return null
+    }
+
     if (!accessToken) {
       setError("Sign in again before syncing to Obsidian.")
       return null
@@ -50,6 +55,7 @@ export function useObsidianSync(accessToken?: string) {
   }
 
   return {
+    enabled,
     running,
     error,
     lastSyncedPath,

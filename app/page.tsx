@@ -64,7 +64,8 @@ export default function Home() {
   const captures = useCaptures(user?.id)
   const assistant = useAssistant(user?.id, session?.access_token)
   const commitments = useExternalCommitments(user?.id)
-  const obsidian = useObsidianSync(session?.access_token)
+  const obsidianEnabled = process.env.NEXT_PUBLIC_OBSIDIAN_ENABLED !== "false"
+  const obsidian = useObsidianSync(session?.access_token, obsidianEnabled)
   const { order, setOrder } = useTileOrder()
   const isMobile = useIsMobile()
   const sensors = useSensors(
@@ -133,7 +134,7 @@ export default function Home() {
         obsidianError={obsidian.error}
         lastSyncedPath={obsidian.lastSyncedPath}
         onRunNow={assistant.runNow}
-        onSyncBrief={obsidian.syncBrief}
+        onSyncBrief={obsidian.enabled ? obsidian.syncBrief : undefined}
       />
       {isMobile ? (
         <div className="grid gap-4 lg:grid-cols-12">

@@ -14,7 +14,8 @@ export default function CapturePage() {
   const { user, session } = useAuth()
   const captures = useCaptures(user?.id)
   const tasks = useTasks(user?.id)
-  const obsidian = useObsidianSync(session?.access_token)
+  const obsidianEnabled = process.env.NEXT_PUBLIC_OBSIDIAN_ENABLED !== "false"
+  const obsidian = useObsidianSync(session?.access_token, obsidianEnabled)
 
   async function convert(id: string, text: string) {
     await tasks.addTask({
@@ -44,14 +45,16 @@ export default function CapturePage() {
               {capture.text}
             </p>
             <div className="flex gap-2">
-              <Button variant="secondary" className="gap-2" onClick={() => obsidian.syncCapture(capture.id)}>
-                {obsidian.running === "capture" ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <BookOpenText className="size-4" />
-                )}
-                Obsidian
-              </Button>
+              {obsidian.enabled ? (
+                <Button variant="secondary" className="gap-2" onClick={() => obsidian.syncCapture(capture.id)}>
+                  {obsidian.running === "capture" ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <BookOpenText className="size-4" />
+                  )}
+                  Obsidian
+                </Button>
+              ) : null}
               <Button className="gap-2" onClick={() => convert(capture.id, capture.text)}>
                 <CheckSquare className="size-4" />
                 Task

@@ -39,7 +39,10 @@ export async function POST(request: NextRequest) {
 
   const vaultPath = getVaultPath()
   if (!vaultPath) {
-    return NextResponse.json({ ok: false, error: "Obsidian vault path is not configured." }, { status: 500 })
+    return NextResponse.json(
+      { ok: false, error: "Obsidian export is disabled in this environment." },
+      { status: 503 },
+    )
   }
 
   const supabase = getSupabaseServerAdmin()
