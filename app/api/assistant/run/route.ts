@@ -61,7 +61,21 @@ async function handleRun(request: NextRequest, trigger: "manual" | "cron") {
 
   try {
     const result = await runAssistant(userId, trigger)
-    return NextResponse.json({ ok: true, result })
+    const failed = result.status === "failed"
+    const partialFailure = result.status === "partial_failure"
+    const status = failed ? 500 : partialFailure ? 424 : 200
+
+    return NextResponse.json(
+      {
+        ok: !failed && !partialFailure,
+        result,
+        error:
+          failed || partialFailure
+            ? result.errors[0] ?? "Assistant run completed with source errors."
+            : undefined,
+      },
+      { status },
+    )
   } catch (error) {
     return NextResponse.json(
       {

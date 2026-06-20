@@ -2,6 +2,7 @@ import { google } from "googleapis"
 import type {
   AssistantBrief,
   AssistantRunStatus,
+  AssistantSourceState,
   AssistantTriggerSource,
   Capture,
   Habit,
@@ -580,18 +581,26 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
 
   const startedAt = new Date()
   const today = formatDateKey(startedAt)
-  const [{ data: tasksData }, { data: habitsData }, { data: capturesData }, latestBriefResult] =
+  const [
+    { data: tasksData },
+    { data: habitsData },
+    { data: capturesData },
+    latestBriefResult,
+    sourceStateResult,
+  ] =
     await Promise.all([
       supabase.from("tasks").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("habits").select("*").eq("user_id", userId).eq("archived", false).order("created_at", { ascending: false }),
       supabase.from("captures").select("*").eq("user_id", userId).eq("converted", false).order("created_at", { ascending: false }),
       supabase.from("assistant_briefs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("assistant_source_states").select("*").eq("user_id", userId).maybeSingle(),
     ])
 
   const tasks = (tasksData ?? []) as Task[]
   const habits = (habitsData ?? []) as Habit[]
   const captures = (capturesData ?? []) as Capture[]
   const latestBrief = latestBriefResult.data as AssistantBrief | null
+  const previousSourceState = sourceStateResult.data as AssistantSourceState | null
 
   const [calendarResult, gmailResult] = await Promise.all([
     fetchCalendarCommitments(startedAt),
@@ -701,9 +710,11 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     captures.length ? "Review assistant-added inbox items." : "",
   ]).slice(0, 4)
 
-  const summary = topPriorities.length
-    ? `Assistant ready. ${topPriorities.length} priorities, ${meetingCountToday} calendar commitments, ${captures.length} inbox items in play.`
-    : `Assistant checked sources. ${meetingCountToday} calendar commitments and no urgent task reshuffle.`
+  const summary = errors.length
+    ? `Assistant hit source sync errors. ${topPriorities.length} priorities, ${meetingCountToday} calendar commitments, ${captures.length} inbox items in play.`
+    : topPriorities.length
+      ? `Assistant ready. ${topPriorities.length} priorities, ${meetingCountToday} calendar commitments, ${captures.length} inbox items in play.`
+      : `Assistant checked sources. ${meetingCountToday} calendar commitments and no urgent task reshuffle.`
 
   const noMeaningfulChange =
     changes.length === 0 &&
@@ -765,7 +776,10 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     user_id: userId,
     calendar_last_synced_at: calendarResult.report.syncedAt,
     gmail_last_synced_at: gmailResult.report.syncedAt,
-    last_successful_run_at: status === "failed" ? null : new Date().toISOString(),
+    last_successful_run_at:
+      status === "success" || status === "no_change"
+        ? new Date().toISOString()
+        : previousSourceState?.last_successful_run_at ?? null,
     last_attempted_run_at: new Date().toISOString(),
     next_suggested_run_at: computeNextSuggestedRun(startedAt),
     status,
