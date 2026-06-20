@@ -2,33 +2,81 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Sparkles } from "lucide-react"
+import { ArrowRight, KeyRound, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { isEmailAllowed } from "@/lib/allowlist"
+import { getAllowedEmails } from "@/lib/allowlist"
+import {
+  getPasswordAuthSuccessMessage,
+  type PasswordAuthAction,
+  validatePasswordAuthInput,
+} from "@/lib/auth-form"
 import { hasSupabaseEnv, getSupabaseBrowser } from "@/lib/supabase-browser"
 
 export default function SignInPage() {
   const [email, setEmail] = useState("")
-  const [sent, setSent] = useState(false)
-  const [blocked, setBlocked] = useState(false)
+  const [password, setPassword] = useState("")
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loadingAction, setLoadingAction] = useState<PasswordAuthAction | null>(null)
   const router = useRouter()
   const supabase = getSupabaseBrowser()
+  const allowedEmails = getAllowedEmails("client")
 
-  async function signIn() {
-    if (!supabase || !email.trim()) return
-    if (!isEmailAllowed(email)) {
-      setBlocked(true)
+  async function submit(action: PasswordAuthAction) {
+    if (!supabase) return
+
+    setMessage(null)
+    setError(null)
+
+    const validated = validatePasswordAuthInput({
+      email,
+      password,
+      allowlist: allowedEmails,
+    })
+
+    if (!validated.ok) {
+      setError(validated.error)
       return
     }
-    const appUrl = (
-      process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-    ).replace(/\/$/, "")
-    await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${appUrl}/auth/callback` },
-    })
-    setSent(true)
+
+    setLoadingAction(action)
+
+    try {
+      if (action === "sign-in") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: validated.email,
+          password: validated.password,
+        })
+
+        if (error) throw error
+
+        setMessage(getPasswordAuthSuccessMessage(action))
+        router.replace("/")
+        return
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: validated.email,
+        password: validated.password,
+      })
+
+      if (error) throw error
+
+      if (data.session) {
+        setMessage("Account created. Redirecting…")
+        router.replace("/")
+        return
+      }
+
+      setMessage(
+        "Account created, but Supabase email confirmation is still enabled. Disable email confirmation for this private app or confirm once, then sign in.",
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to authenticate.")
+    } finally {
+      setLoadingAction(null)
+    }
   }
 
   return (
@@ -37,11 +85,11 @@ export default function SignInPage() {
       <section className="relative w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 shadow-2xl shadow-black/40 backdrop-blur-xl">
         <div className="mb-8 flex items-center gap-3">
           <div className="grid size-10 place-items-center rounded-lg bg-white text-black">
-            <Sparkles className="size-5" />
+            <KeyRound className="size-5" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Focus OS</h1>
-            <p className="text-sm text-white/45">Magic-link sign in</p>
+            <p className="text-sm text-white/45">Private password sign in</p>
           </div>
         </div>
 
@@ -49,33 +97,66 @@ export default function SignInPage() {
           <div className="rounded-md border border-white/[0.08] bg-black/20 p-4 text-sm text-white/60">
             Add Supabase env keys to enable sign-in. Local UI is ready.
           </div>
-        ) : blocked ? (
-          <div className="rounded-md border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">
-            Email not allowed for this workspace.
-          </div>
-        ) : sent ? (
-          <div className="rounded-md border border-[var(--accent-blue)]/30 bg-[var(--accent-blue)]/10 p-4 text-sm text-blue-100">
-            Check email for sign-in link.
-          </div>
         ) : (
           <div className="space-y-3">
+            {error ? (
+              <div className="rounded-md border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">
+                {error}
+              </div>
+            ) : null}
+
+            {message ? (
+              <div className="rounded-md border border-[var(--accent-blue)]/30 bg-[var(--accent-blue)]/10 p-4 text-sm text-blue-100">
+                {message}
+              </div>
+            ) : null}
+
             <Input
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value)
-                setBlocked(false)
+                setError(null)
               }}
               onKeyDown={(event) => {
-                if (event.key === "Enter") signIn()
+                if (event.key === "Enter") void submit("sign-in")
               }}
               className="border-white/[0.08] bg-white/[0.05]"
             />
-            <Button className="w-full gap-2" onClick={signIn}>
-              Send link
+            <Input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                setError(null)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void submit("sign-in")
+              }}
+              className="border-white/[0.08] bg-white/[0.05]"
+            />
+            <Button
+              className="w-full gap-2"
+              disabled={loadingAction !== null}
+              onClick={() => void submit("sign-in")}
+            >
+              {loadingAction === "sign-in" ? "Signing in..." : "Sign in"}
               <ArrowRight className="size-4" />
             </Button>
+            <Button
+              variant="secondary"
+              className="w-full gap-2"
+              disabled={loadingAction !== null}
+              onClick={() => void submit("sign-up")}
+            >
+              {loadingAction === "sign-up" ? "Creating account..." : "Create account"}
+              <UserPlus className="size-4" />
+            </Button>
+            <p className="text-xs text-white/50">
+              For this private app, create the account once with your allowed email, then keep using password sign-in.
+            </p>
           </div>
         )}
 

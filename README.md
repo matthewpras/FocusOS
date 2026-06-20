@@ -14,15 +14,13 @@ npm run dev
 1. Create a new Supabase project.
 2. Open SQL Editor.
 3. Run `schema.sql`.
-4. In Authentication > URL Configuration, add:
-   - Local: `http://localhost:3000/auth/callback`
-   - Vercel: `https://YOUR_VERCEL_URL/auth/callback`
-5. Set environment variables:
+4. For a private single-user app, set Authentication so email/password sign-in is enabled.
+5. If you do not want any email-based auth friction, disable email confirmation in Supabase Auth settings.
+6. Set environment variables:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
-NEXT_PUBLIC_APP_URL=https://YOUR_VERCEL_URL
 NEXT_PUBLIC_ALLOWED_EMAILS=you@example.com
 ```
 
