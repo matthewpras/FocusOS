@@ -12,12 +12,27 @@ export function useTileOrder() {
     const saved = window.localStorage.getItem(KEY)
     if (!saved) return
 
-    const parsed = JSON.parse(saved) as string[]
-    const merged = [
-      ...parsed.filter((item) => DEFAULT_TILE_ORDER.includes(item)),
-      ...DEFAULT_TILE_ORDER.filter((item) => !parsed.includes(item)),
-    ]
-    setOrder(merged)
+    try {
+      const parsed = JSON.parse(saved)
+      if (!Array.isArray(parsed)) {
+        window.localStorage.removeItem(KEY)
+        return
+      }
+
+      const nextOrder = parsed.filter(
+        (item): item is string =>
+          typeof item === "string" && DEFAULT_TILE_ORDER.includes(item),
+      )
+
+      const merged = [
+        ...nextOrder,
+        ...DEFAULT_TILE_ORDER.filter((item) => !nextOrder.includes(item)),
+      ]
+
+      setOrder(merged)
+    } catch {
+      window.localStorage.removeItem(KEY)
+    }
   }, [])
 
   function updateOrder(nextOrder: string[]) {

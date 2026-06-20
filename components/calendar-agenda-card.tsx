@@ -8,7 +8,20 @@ import type { ExternalCommitment } from "@/types"
 
 function formatEventTime(iso: string | null) {
   if (!iso) return "All day"
-  return format(new Date(iso), "EEE h:mm a")
+
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) return "Time unavailable"
+
+  return format(parsed, "EEE h:mm a")
+}
+
+function formatRelativeEventTime(iso: string | null) {
+  if (!iso) return "Your next sync will fill this in."
+
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) return "Time unavailable"
+
+  return `${formatEventTime(iso)} • ${formatDistanceToNow(parsed, { addSuffix: true })}`
 }
 
 export function CalendarAgendaCard({
@@ -33,9 +46,7 @@ export function CalendarAgendaCard({
             {nextEvent?.title ?? "No upcoming calendar events"}
           </p>
           <p className="mt-1 text-sm text-white/55">
-            {nextEvent?.starts_at
-              ? `${formatEventTime(nextEvent.starts_at)} • ${formatDistanceToNow(new Date(nextEvent.starts_at), { addSuffix: true })}`
-              : "Your next sync will fill this in."}
+            {formatRelativeEventTime(nextEvent?.starts_at ?? null)}
           </p>
         </div>
 

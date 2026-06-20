@@ -13,6 +13,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { AssistantBrief, AssistantRun, AssistantSourceState } from "@/types"
 
+function formatRelativeTime(value: string | null | undefined, fallback: string) {
+  if (!value) return fallback
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return fallback
+
+  return formatDistanceToNow(parsed, { addSuffix: true })
+}
+
 function toneForStatus(status: string | undefined) {
   if (status === "failed") return "bg-red-500/12 text-red-200 border-red-500/20"
   if (status === "partial_failure") return "bg-amber-500/12 text-amber-100 border-amber-500/20"
@@ -47,9 +56,7 @@ export function AssistantSummaryCard({
 }) {
   const status = latestRun?.status ?? sourceState?.status ?? "idle"
   const lastRunAt = latestRun?.started_at ?? sourceState?.last_attempted_run_at
-  const lastRunLabel = lastRunAt
-    ? formatDistanceToNow(new Date(lastRunAt), { addSuffix: true })
-    : "No assistant runs yet"
+  const lastRunLabel = formatRelativeTime(lastRunAt, "No assistant runs yet")
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.05] p-5 backdrop-blur-xl">
