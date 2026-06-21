@@ -101,7 +101,9 @@ export function TodayHomeView({
                 <CompactWeekCalendar days={days} />
                 <TodayTaskList tasks={tasks} onComplete={onCompleteTask} />
               </div>
-              <ScheduleRail pressure={pressure} scheduleRows={scheduleRows} />
+              <div className="mt-20 xl:mt-0">
+                <ScheduleRail pressure={pressure} scheduleRows={scheduleRows} />
+              </div>
             </div>
           </div>
         </main>
