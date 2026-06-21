@@ -20,9 +20,11 @@ export function CaptureModal({ onSave }: { onSave: (text: string) => void }) {
       }
     }
     window.addEventListener("open-capture", openCapture)
+    window.addEventListener("focusos:open-capture", openCapture)
     window.addEventListener("keydown", onKeyDown)
     return () => {
       window.removeEventListener("open-capture", openCapture)
+      window.removeEventListener("focusos:open-capture", openCapture)
       window.removeEventListener("keydown", onKeyDown)
     }
   }, [])
