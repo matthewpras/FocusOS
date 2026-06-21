@@ -26,6 +26,8 @@ MVP includes:
 - realtime subscriptions for MVP tables
 - Operations/audit surface
 
+Operations is desktop-only in MVP. Mobile nav stays focused on five daily-use routes: Home, Tasks, Calendar, Habits, Inbox. Add mobile Operations later only if audit checks become frequent on phone.
+
 Phase 2 excludes:
 
 - `goals`
@@ -34,6 +36,26 @@ Phase 2 excludes:
 - finance desk
 - remote `/api/hermes/*`
 - deeper Obsidian routing UI
+
+Compatibility decision:
+
+- Keep existing assistant-era columns: `assistant_key`, `assistant_source`, `created_by_assistant`.
+- Add Hermes provenance beside them for MVP.
+- Do not migrate old assistant fields in this plan.
+- Later cleanup can consolidate provenance after Hermes flow proves stable.
+
+Environment decision:
+
+- App/Vercel env keeps current names: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_EMAILS`, `NEXT_PUBLIC_ALLOWED_EMAILS`.
+- Hermes local env uses separate names: `FOCUSOS_SUPABASE_URL`, `FOCUSOS_SUPABASE_SERVICE_ROLE_KEY`, `FOCUSOS_USER_EMAIL`, `FOCUSOS_AGENT_NAME`.
+- This split is intentional so browser/app deployment config never gets confused with Hermes-local admin secrets.
+
+Execution hygiene:
+
+- All commit steps below assume Task 0 completed first.
+- Do not execute implementation work on a dirty `main` branch.
+- If repo already has unrelated untracked probe files, relocate them before running lint/build.
+- `supabase/migrations/` does not exist yet; Task 2 creates migration workflow from scratch and mirrors it into `schema.sql`.
 
 ## File Structure
 
@@ -51,6 +73,89 @@ Phase 2 excludes:
 - Create `app/operations/page.tsx`: audit and safety contract page.
 - Modify `components/app-sidebar.tsx`: add desktop Operations nav.
 - Modify `README.md`: document Hermes setup and Supabase verification.
+
+---
+
+### Task 0: Workspace Hygiene And Isolation
+
+**Files:**
+- Modify: `.gitignore`
+
+- [ ] **Step 1: Check current branch and working tree**
+
+Run:
+
+```bash
+git branch --show-current
+git status --short
+```
+
+Expected: current branch and working-tree state are visible before changes. If already on a feature branch with a clean tree, continue. If on `main`, create an isolated branch in Step 3.
+
+- [ ] **Step 2: Ignore local worktrees**
+
+Ensure `.gitignore` contains:
+
+```gitignore
+.worktrees/
+```
+
+- [ ] **Step 3: Move repo-root probe files if present**
+
+Run:
+
+```bash
+mkdir -p /tmp/focusos-probes
+for file in \
+  .focusos_blocker_check.js \
+  .focusos_columns_probe.js \
+  .focusos_runs_latest.js \
+  .focusos_runs_probe.js \
+  .focusos_schema_probe.js \
+  .tmp_focusos_blocker_check.js \
+  .tmp_focusos_schema_probe.js
+do
+  if [ -f "$file" ] && ! git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+    mv "$file" /tmp/focusos-probes/
+  fi
+done
+```
+
+Expected: only untracked probe files move. Tracked files are not touched.
+
+- [ ] **Step 4: Create feature branch if needed**
+
+If current branch is `main`, run:
+
+```bash
+git switch -c codex/hermes-foundation
+```
+
+Expected: branch becomes `codex/hermes-foundation`.
+
+- [ ] **Step 5: Verify clean implementation baseline**
+
+Run:
+
+```bash
+git status --short
+npm run lint
+npm run build
+```
+
+Expected:
+
+- no untracked probe files remain
+- lint passes after probe cleanup
+- build passes
+- only intentional `.gitignore` change may remain before commit
+
+- [ ] **Step 6: Commit hygiene change if `.gitignore` changed**
+
+```bash
+git add .gitignore
+git commit -m "chore: ignore local worktrees"
+```
 
 ---
 
@@ -93,7 +198,7 @@ Run:
 npm run lint
 ```
 
-Expected: PASS.
+Expected: PASS after Task 0 probe cleanup. If lint fails on repo-root probe files, Task 0 was not completed.
 
 - [ ] **Step 4: Commit**
 
@@ -1854,4 +1959,3 @@ All subscriptions filter by `user_id` where available.
 - Helper exports match Hermes list.
 - UI keeps normal auth/RLS and can read audit events.
 - `npm test`, `npm run lint`, and `npm run build` pass.
-
