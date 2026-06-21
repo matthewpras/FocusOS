@@ -11,7 +11,12 @@ import { useAuth } from "@/hooks/use-auth"
 import { useCaptures } from "@/hooks/useCaptures"
 import { hasSupabaseEnv } from "@/lib/supabase-browser"
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+type AppShellProps = {
+  children: React.ReactNode
+  chrome?: "default" | "today"
+}
+
+export function AppShell({ children, chrome = "default" }: AppShellProps) {
   const { user, session, loading, signOut } = useAuth()
   const captures = useCaptures(user?.id)
   const router = useRouter()
@@ -81,22 +86,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_0%,oklch(0.65_0.18_240_/_0.16),transparent_32%),radial-gradient(circle_at_90%_12%,oklch(0.65_0.22_290_/_0.18),transparent_28%)]" />
+      {chrome === "default" ? (
+        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_0%,oklch(0.65_0.18_240_/_0.16),transparent_32%),radial-gradient(circle_at_90%_12%,oklch(0.65_0.22_290_/_0.18),transparent_28%)]" />
+      ) : null}
       <div className="relative flex">
-        <AppSidebar
-          email={user?.email ?? "Supabase setup pending"}
-          inboxCount={captures.captures.length}
-          onSignOut={() => signOut()?.then(() => router.replace("/sign-in"))}
-        />
-        <main className="min-h-screen flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-5 sm:px-6 lg:px-8 lg:pb-10">
-          <div className="mx-auto max-w-6xl space-y-6">
-            <SetupNotice />
-            {children}
-          </div>
+        {chrome === "default" ? (
+          <AppSidebar
+            email={user?.email ?? "Supabase setup pending"}
+            inboxCount={captures.captures.length}
+            onSignOut={() => signOut()?.then(() => router.replace("/sign-in"))}
+          />
+        ) : null}
+        <main
+          className={
+            chrome === "today"
+              ? "min-h-screen flex-1"
+              : "min-h-screen flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-5 sm:px-6 lg:px-8 lg:pb-10"
+          }
+        >
+          {chrome === "today" ? (
+            <>
+              <SetupNotice />
+              {children}
+            </>
+          ) : (
+            <div className="mx-auto max-w-6xl space-y-6">
+              <SetupNotice />
+              {children}
+            </div>
+          )}
         </main>
       </div>
       <MobileNav />
-      <CaptureFAB />
+      {chrome === "default" ? <CaptureFAB /> : null}
       <CaptureModal onSave={captures.addCapture} />
     </div>
   )
