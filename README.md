@@ -76,3 +76,68 @@ Authorization: Bearer YOUR_CRON_SECRET
 - GitHub Actions workflow lives at `.github/workflows/focusos-assistant.yml`.
 - Add GitHub repository secret `CRON_SECRET` with the same value as Vercel `CRON_SECRET`.
 - Optional GitHub repository variable `FOCUS_OS_ASSISTANT_URL` can override the production endpoint.
+
+## Hermes Direct Supabase Admin
+
+Hermes runs from a trusted local PC and writes directly to Supabase with a local-only admin secret.
+
+Required safety contract:
+
+- service role or secret key stays only on Hermes PC
+- app UI uses normal Supabase auth and RLS
+- helper writes insert `agent_events`
+- helper writes populate provenance columns
+- relevant tables are added to `supabase_realtime`
+- new public tables have explicit Data API grants plus RLS policies
+
+Apply this SQL in Supabase:
+
+```bash
+supabase/migrations/202606210001_hermes_foundation.sql
+```
+
+Hermes local env lives in `.env.hermes.local` on the Hermes PC. See `scripts/hermes-admin/README.md`.
+
+Manual table verification after applying migration:
+
+```sql
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_name in (
+    'agent_events',
+    'domains',
+    'projects',
+    'decisions',
+    'school_items',
+    'capture_intake',
+    'board_recommendations'
+  )
+order by table_name;
+```
+
+Expected: seven rows.
+
+Manual realtime verification:
+
+```sql
+select tablename
+from pg_publication_tables
+where pubname = 'supabase_realtime'
+  and tablename in (
+    'tasks',
+    'captures',
+    'capture_intake',
+    'external_commitments',
+    'assistant_briefs',
+    'board_recommendations',
+    'decisions',
+    'school_items',
+    'agent_events',
+    'projects',
+    'domains'
+  )
+order by tablename;
+```
+
+Expected: eleven rows.

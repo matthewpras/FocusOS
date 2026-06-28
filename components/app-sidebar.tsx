@@ -8,6 +8,7 @@ import {
   Flame,
   Inbox,
   LayoutDashboard,
+  Activity,
   LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,7 @@ const nav = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/habits", label: "Habits", icon: Flame },
   { href: "/capture", label: "Inbox", icon: Inbox },
+  { href: "/operations", label: "Operations", icon: Activity },
 ]
 
 export function AppSidebar({
