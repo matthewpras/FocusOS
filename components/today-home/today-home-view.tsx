@@ -9,6 +9,7 @@ import { DarkTodaySidebar } from "@/components/today-home/dark-today-sidebar"
 import { ScheduleRail } from "@/components/today-home/schedule-rail"
 import { TodayTaskList } from "@/components/today-home/today-task-list"
 import type {
+  AssistantFreshness,
   CompactCalendarDay,
   FocusPressure,
   ScheduleRow,
@@ -21,6 +22,7 @@ type TodayHomeViewProps = {
   days: CompactCalendarDay[]
   tasks: Task[]
   pressure: FocusPressure
+  assistantFreshness: AssistantFreshness
   scheduleRows: ScheduleRow[]
   assistantRunning: boolean
   onCompleteTask: (task: Task) => void
@@ -34,6 +36,7 @@ export function TodayHomeView({
   days,
   tasks,
   pressure,
+  assistantFreshness,
   scheduleRows,
   assistantRunning,
   onCompleteTask,
@@ -70,6 +73,18 @@ export function TodayHomeView({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-[oklch(0.95_0.018_250)] px-3 py-1.5 text-xs font-semibold text-[var(--today-muted)]">
                   {pressure.score}/100 · {formatFocusMinutes(pressure.availableFocusMinutes)} available
+                </span>
+                <span
+                  className={
+                    assistantFreshness.state === "healthy"
+                      ? "rounded-full bg-emerald-600/10 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                      : assistantFreshness.state === "failed"
+                        ? "rounded-full bg-red-600/10 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        : "rounded-full bg-amber-500/14 px-3 py-1.5 text-xs font-semibold text-amber-700"
+                  }
+                  title={assistantFreshness.detail}
+                >
+                  {assistantFreshness.label}
                 </span>
                 <Button
                   type="button"

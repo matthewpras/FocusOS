@@ -1,17 +1,17 @@
 "use client"
 
+import Link from "next/link"
 import {
   Archive,
+  Activity,
   BookOpen,
   CalendarDays,
   CheckCircle2,
   Circle,
   Home,
   Inbox,
-  Plus,
   Settings,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type ProjectCounts = {
@@ -29,9 +29,10 @@ type DarkTodaySidebarProps = {
 }
 
 const primaryItems = [
-  { label: "Today", icon: Home, active: true },
-  { label: "Inbox", icon: Inbox },
-  { label: "Upcoming", icon: CalendarDays },
+  { label: "Today", icon: Home, href: "/" },
+  { label: "Inbox", icon: Inbox, href: "/capture" },
+  { label: "Upcoming", icon: CalendarDays, href: "/calendar" },
+  { label: "Operations", icon: Activity, href: "/operations" },
   { label: "Anytime", icon: CheckCircle2 },
   { label: "Someday", icon: Archive },
   { label: "Logbook", icon: BookOpen },
@@ -57,15 +58,9 @@ export function DarkTodaySidebar({
           <p className="text-sm font-semibold leading-5">FocusOS</p>
           <p className="text-xs text-[var(--today-sidebar-muted)]">Today</p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
-          aria-label="New Project"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <span className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-white/54">
+          Read-only projects
+        </span>
       </div>
 
       <nav className="space-y-1" aria-label="Today navigation">
@@ -73,15 +68,16 @@ export function DarkTodaySidebar({
           const Icon = item.icon
           const count = item.label === "Inbox" ? inboxCount : undefined
 
-          return (
-            <button
-              key={item.label}
-              type="button"
-              className={cn(
-                "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/72 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45",
-                item.active && "bg-white/12 text-white",
-              )}
-            >
+          const active = item.href === "/"
+          const className = cn(
+            "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/72 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45",
+            item.href
+              ? "hover:bg-white/8 hover:text-white"
+              : "cursor-not-allowed opacity-45",
+            active && "bg-white/12 text-white",
+          )
+          const content = (
+            <>
               <Icon className="size-4" />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {typeof count === "number" && count > 0 ? (
@@ -89,7 +85,17 @@ export function DarkTodaySidebar({
                   {count}
                 </span>
               ) : null}
-            </button>
+            </>
+          )
+
+          return item.href ? (
+            <Link key={item.label} href={item.href} className={className}>
+              {content}
+            </Link>
+          ) : (
+            <div key={item.label} className={className} aria-disabled="true">
+              {content}
+            </div>
           )
         })}
       </nav>
@@ -99,10 +105,10 @@ export function DarkTodaySidebar({
       </div>
       <nav className="mt-2 space-y-1" aria-label="Projects">
         {projects.map((project) => (
-          <button
+          <div
             key={project.key}
-            type="button"
-            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/72 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45"
+            className="flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-md px-2 text-left text-sm text-white/45"
+            aria-disabled="true"
           >
             <span className={cn("size-2.5 rounded-full", project.tone)} />
             <span className="min-w-0 flex-1 truncate">{project.label}</span>
@@ -111,25 +117,18 @@ export function DarkTodaySidebar({
                 {projectCounts[project.key]}
               </span>
             ) : null}
-          </button>
+          </div>
         ))}
-        <button
-          type="button"
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/60 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45"
-        >
-          <Plus className="size-4" />
-          New Project
-        </button>
       </nav>
 
       <div className="mt-auto space-y-1 border-t border-white/10 pt-3">
-        <button
-          type="button"
-          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/72 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45"
+        <div
+          className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-md px-2 text-left text-sm text-white/45"
+          aria-disabled="true"
         >
           <Settings className="size-4" />
           Settings
-        </button>
+        </div>
         <div className="flex items-center gap-2 px-2 py-2 text-xs text-[var(--today-sidebar-muted)]">
           <Circle className="size-2 fill-current" />
           Local command center

@@ -12,6 +12,7 @@ import { useTasks } from "@/hooks/useTasks"
 import {
   buildCompactCalendarDays,
   calculateFocusPressureScore,
+  getAssistantFreshness,
   getScheduleRows,
   getTodayTasks,
 } from "@/lib/today-home"
@@ -54,6 +55,10 @@ export default function Home() {
       todayTasks.length,
     ],
   )
+  const assistantFreshness = useMemo(
+    () => getAssistantFreshness(assistant.sourceState, now),
+    [assistant.sourceState, now],
+  )
 
   function openQuickCapture() {
     window.dispatchEvent(new CustomEvent("focusos:open-capture"))
@@ -78,6 +83,7 @@ export default function Home() {
         days={calendarDays}
         tasks={todayTasks}
         pressure={pressure}
+        assistantFreshness={assistantFreshness}
         scheduleRows={scheduleRows}
         assistantRunning={assistant.running}
         onCompleteTask={completeTask}

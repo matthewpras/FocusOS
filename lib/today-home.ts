@@ -44,6 +44,18 @@ export type FocusPressure = {
   availableFocusMinutes: number
 }
 
+type AssistantFreshnessInput = {
+  status?: string | null
+  last_successful_run_at?: string | null
+  last_attempted_run_at?: string | null
+}
+
+export type AssistantFreshness = {
+  state: "healthy" | "stale" | "unknown" | "failed"
+  label: string
+  detail: string
+}
+
 function dateKey(value: Date) {
   return format(value, "yyyy-MM-dd")
 }
@@ -149,4 +161,50 @@ export function formatFocusMinutes(minutes: number) {
   const remaining = minutes % 60
   if (!hours) return `${remaining}m`
   return remaining ? `${hours}h ${remaining}m` : `${hours}h`
+}
+
+export function getAssistantFreshness(
+  sourceState: AssistantFreshnessInput | null | undefined,
+  now = new Date(),
+): AssistantFreshness {
+  if (sourceState?.status === "failed") {
+    return {
+      state: "failed",
+      label: "Hermes failed",
+      detail: "Latest assistant run failed. Review Operations before relying on it.",
+    }
+  }
+
+  const lastRun = sourceState?.last_successful_run_at ?? sourceState?.last_attempted_run_at
+  const parsed = lastRun ? new Date(lastRun) : null
+
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return {
+      state: "unknown",
+      label: "Hermes not run",
+      detail: "No assistant run recorded yet.",
+    }
+  }
+
+  const ageHours = (now.getTime() - parsed.getTime()) / (1000 * 60 * 60)
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsed)
+
+  if (ageHours > 24) {
+    return {
+      state: "stale",
+      label: "Hermes stale",
+      detail: `Last successful run ${formatted}. Run Hermes or check Operations.`,
+    }
+  }
+
+  return {
+    state: "healthy",
+    label: "Hermes current",
+    detail: `Last successful run ${formatted}.`,
+  }
 }
