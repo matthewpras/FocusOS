@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
+import { getRealtimeChannelName } from "@/lib/realtime-channel"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import { computeCurrentStreak, computeLongestStreak } from "@/lib/streak"
 import type { Habit, HabitLog, HabitWithStats } from "@/types"
@@ -45,7 +46,7 @@ export function useHabits(userId?: string) {
     if (!supabase || !userId) return
 
     const channel = supabase
-      .channel(`habits-${userId}`)
+      .channel(getRealtimeChannelName("habits", userId))
       .on(
         "postgres_changes",
         {

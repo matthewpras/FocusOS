@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
+import { getRealtimeChannelName } from "@/lib/realtime-channel"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import type { Category, Priority, Task } from "@/types"
 
@@ -39,7 +40,7 @@ export function useTasks(userId?: string) {
     if (!supabase || !userId) return
 
     const channel = supabase
-      .channel(`tasks-${userId}`)
+      .channel(getRealtimeChannelName("tasks", userId))
       .on(
         "postgres_changes",
         {

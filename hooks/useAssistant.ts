@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react"
 import type { AssistantBrief, AssistantRun, AssistantSourceState } from "@/types"
+import { getRealtimeChannelName } from "@/lib/realtime-channel"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 
 type RunResponse = {
@@ -62,7 +63,7 @@ export function useAssistant(userId?: string, accessToken?: string) {
     if (!supabase || !userId) return
 
     const channel = supabase
-      .channel(`assistant-${userId}`)
+      .channel(getRealtimeChannelName("assistant", userId))
       .on(
         "postgres_changes",
         {

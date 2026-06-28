@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { getRealtimeChannelName } from "@/lib/realtime-channel"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import type { AssistantSourceState, ExternalCommitment } from "@/types"
 
@@ -43,7 +44,7 @@ export function useExternalCommitments(userId?: string) {
     if (!supabase || !userId) return
 
     const channel = supabase
-      .channel(`external-commitments-${userId}`)
+      .channel(getRealtimeChannelName("external-commitments", userId))
       .on(
         "postgres_changes",
         {
