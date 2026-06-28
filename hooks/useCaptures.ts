@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { getRealtimeChannelName } from "@/lib/realtime-channel"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import type { Capture } from "@/types"
 
@@ -33,7 +32,7 @@ export function useCaptures(userId?: string) {
     if (!supabase || !userId) return
 
     const channel = supabase
-      .channel(getRealtimeChannelName("captures", userId))
+      .channel(`captures-${userId}-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {
