@@ -84,6 +84,15 @@ export function getTodayTasks<T extends TaskLike>(tasks: T[], now = new Date()):
     })
 }
 
+export function getTodayTaskPreview<T extends TaskLike>(tasks: T[], limit = 6) {
+  const visibleTasks = tasks.slice(0, limit)
+
+  return {
+    visibleTasks,
+    hiddenTaskCount: Math.max(0, tasks.length - visibleTasks.length),
+  }
+}
+
 export function buildCompactCalendarDays(
   commitments: CommitmentLike[],
   now = new Date(),

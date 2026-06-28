@@ -30,9 +30,9 @@ type DarkTodaySidebarProps = {
 
 const primaryItems = [
   { label: "Today", icon: Home, href: "/" },
-  { label: "Inbox", icon: Inbox, href: "/capture" },
-  { label: "Upcoming", icon: CalendarDays, href: "/calendar" },
-  { label: "Operations", icon: Activity, href: "/operations" },
+  { label: "Inbox", icon: Inbox },
+  { label: "Upcoming", icon: CalendarDays },
+  { label: "Operations", icon: Activity },
   { label: "Anytime", icon: CheckCircle2 },
   { label: "Someday", icon: Archive },
   { label: "Logbook", icon: BookOpen },
@@ -73,7 +73,7 @@ export function DarkTodaySidebar({
             "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-white/72 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45",
             item.href
               ? "hover:bg-white/8 hover:text-white"
-              : "cursor-not-allowed opacity-45",
+              : "cursor-default text-white/45",
             active && "bg-white/12 text-white",
           )
           const content = (
