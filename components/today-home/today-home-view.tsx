@@ -1,12 +1,13 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Command, Inbox, Loader2, Plus, Sparkles } from "lucide-react"
+import { Command, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CompactWeekCalendar } from "@/components/today-home/compact-week-calendar"
 import { CommandPaletteShell } from "@/components/today-home/command-palette-shell"
 import { DarkTodaySidebar } from "@/components/today-home/dark-today-sidebar"
 import { ScheduleRail } from "@/components/today-home/schedule-rail"
+import { TodayHero } from "@/components/today-home/today-hero"
 import { TodayTaskList } from "@/components/today-home/today-task-list"
 import type {
   AssistantFreshness,
@@ -14,7 +15,6 @@ import type {
   FocusPressure,
   ScheduleRow,
 } from "@/lib/today-home"
-import { formatFocusMinutes } from "@/lib/today-home"
 import type { Task } from "@/types"
 
 type TodayHomeViewProps = {
@@ -61,55 +61,16 @@ export function TodayHomeView({
         <DarkTodaySidebar inboxCount={inboxCount} />
         <main className="min-w-0 flex-1 pb-[calc(env(safe-area-inset-bottom)+6rem)] lg:pb-0">
           <div className="mx-auto flex max-w-[86rem] flex-col gap-4 px-3 py-4 sm:px-5 lg:px-6">
-            <header className="flex flex-col gap-3 rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-[var(--today-muted)]">
-                  {dateLabel}
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal">
-                  Today
-                </h1>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[oklch(0.95_0.018_250)] px-3 py-1.5 text-xs font-semibold text-[var(--today-muted)]">
-                  {pressure.score}/100 · {formatFocusMinutes(pressure.availableFocusMinutes)} available
-                </span>
-                <span
-                  className={
-                    assistantFreshness.state === "healthy"
-                      ? "rounded-full bg-emerald-600/10 px-3 py-1.5 text-xs font-semibold text-emerald-700"
-                      : assistantFreshness.state === "failed"
-                        ? "rounded-full bg-red-600/10 px-3 py-1.5 text-xs font-semibold text-red-700"
-                        : "rounded-full bg-amber-500/14 px-3 py-1.5 text-xs font-semibold text-amber-700"
-                  }
-                  title={assistantFreshness.detail}
-                >
-                  {assistantFreshness.label}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-[var(--today-line)] bg-white text-[var(--today-ink)] hover:bg-[oklch(0.97_0.01_244)]"
-                  onClick={onOpenInbox}
-                >
-                  <Inbox className="size-4" />
-                  Inbox
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-[var(--today-blue)] text-white hover:bg-[oklch(0.51_0.2_260)]"
-                  onClick={onRunHermes}
-                  disabled={assistantRunning}
-                >
-                  {assistantRunning ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="size-4" />
-                  )}
-                  Run Hermes
-                </Button>
-              </div>
-            </header>
+            <TodayHero
+              dateLabel={dateLabel}
+              inboxCount={inboxCount}
+              taskCount={tasks.length}
+              pressure={pressure}
+              assistantFreshness={assistantFreshness}
+              assistantRunning={assistantRunning}
+              onOpenInbox={onOpenInbox}
+              onRunHermes={onRunHermes}
+            />
 
             <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
               <div className="min-w-0 space-y-4">
