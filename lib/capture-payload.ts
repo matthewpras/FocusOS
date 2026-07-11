@@ -1,4 +1,4 @@
-import type { CaptureLink } from "@/lib/obsidian-export"
+import type { CaptureLink } from "@/types"
 
 const urlPattern = /https?:\/\/[^\s<>"']+/gi
 
