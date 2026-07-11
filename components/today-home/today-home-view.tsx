@@ -56,7 +56,7 @@ export function TodayHomeView({
   )
 
   return (
-    <div className="min-h-screen bg-[var(--today-bg)] text-[var(--today-ink)]">
+    <div className="min-h-screen bg-[var(--today-bg)] bg-[radial-gradient(circle_at_78%_0%,oklch(0.24_0.055_260)_0,transparent_30rem),linear-gradient(180deg,oklch(0.13_0.019_252),var(--today-bg)_22rem)] text-[var(--today-ink)]">
       <div className="flex min-h-screen">
         <DarkTodaySidebar inboxCount={inboxCount} />
         <main className="min-w-0 flex-1 pb-[calc(env(safe-area-inset-bottom)+6rem)] lg:pb-0">
@@ -88,7 +88,7 @@ export function TodayHomeView({
       <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] right-3 z-40 lg:bottom-5 lg:right-5">
         <Button
           type="button"
-          className="h-11 gap-2 rounded-lg bg-[var(--today-sidebar)] px-3 text-white hover:bg-[oklch(0.23_0.018_255)]"
+          className="h-11 gap-2 rounded-lg border border-white/12 bg-[oklch(0.075_0.014_252)] px-3 text-white shadow-[0_12px_28px_rgb(0_0_0/0.32)] hover:bg-[oklch(0.14_0.018_252)]"
           onClick={() => setCommandOpen(true)}
         >
           <Command className="size-4" />

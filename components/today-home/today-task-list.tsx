@@ -33,7 +33,7 @@ export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
   return (
     <section
       aria-labelledby="today-tasks-heading"
-      className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] text-[var(--today-ink)]"
+      className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] text-[var(--today-ink)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]"
     >
       <div className="flex items-center justify-between border-b border-[var(--today-line)] px-4 py-3">
         <div>
@@ -44,7 +44,7 @@ export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
             Highest-signal actions for today
           </p>
         </div>
-        <span className="rounded-full bg-[oklch(0.95_0.018_250)] px-2 py-1 text-xs font-medium tabular-nums text-[var(--today-muted)]">
+        <span className="rounded-full border border-white/10 bg-[var(--today-panel-muted)] px-2 py-1 text-xs font-medium tabular-nums text-[var(--today-muted)]">
           {visibleTasks.length}/{tasks.length}
         </span>
       </div>
@@ -60,7 +60,7 @@ export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
                   size="icon-sm"
                   aria-label={`Complete ${task.text}`}
                   onClick={() => onComplete(task)}
-                  className="mt-0.5 size-7 rounded-full border border-[var(--today-line)] text-transparent hover:border-[var(--today-blue)] hover:bg-[oklch(0.96_0.026_250)] hover:text-[var(--today-blue)] focus-visible:ring-[var(--today-blue)]"
+                  className="mt-0.5 size-7 rounded-full border border-[var(--today-line)] text-transparent hover:border-[var(--today-blue)] hover:bg-[oklch(0.24_0.07_255)] hover:text-[oklch(0.86_0.07_245)] focus-visible:ring-[var(--today-blue)]"
                 >
                   <Check className="size-3.5" />
                 </Button>
@@ -74,8 +74,8 @@ export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
                   className={cn(
                     "shrink-0 rounded-full px-2 py-1 text-xs font-medium",
                     dueLabel(task) === "Overdue"
-                      ? "bg-[oklch(0.96_0.026_25)] text-[var(--today-red)]"
-                      : "bg-[oklch(0.95_0.018_250)] text-[var(--today-muted)]",
+                      ? "border border-red-300/20 bg-red-400/10 text-red-200"
+                      : "border border-white/10 bg-[var(--today-panel-muted)] text-[var(--today-muted)]",
                   )}
                 >
                   {dueLabel(task)}

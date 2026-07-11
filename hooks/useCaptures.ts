@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
-import type { Capture } from "@/types"
+import { buildCaptureText, extractCaptureLinks } from "@/lib/capture-payload"
+import type { Capture, RichCaptureInput } from "@/types"
 
 export function useCaptures(userId?: string) {
   const [captures, setCaptures] = useState<Capture[]>([])
@@ -52,9 +53,55 @@ export function useCaptures(userId?: string) {
     }
   }, [refresh, supabase, userId])
 
-  async function addCapture(text: string) {
-    if (!supabase || !userId || !text.trim()) return
-    await supabase.from("captures").insert({ user_id: userId, text: text.trim() })
+  async function addCapture(input: string | RichCaptureInput) {
+    if (!supabase || !userId) return
+
+    const richInput =
+      typeof input === "string"
+        ? { note: input }
+        : input
+    const links = extractCaptureLinks([
+      richInput.note,
+      ...(richInput.links ?? []).map((link) => link.url),
+    ])
+    const mediaItems = richInput.mediaItems ?? []
+    const text = buildCaptureText({ note: richInput.note, links })
+
+    if (!text.trim() && !mediaItems.length) return
+
+    const { data: capture, error } = await supabase
+      .from("captures")
+      .insert({
+        user_id: userId,
+        text: text.trim() || "Media capture",
+        obsidian_export_status: "pending",
+      })
+      .select("id")
+      .single()
+
+    if (error || !capture) return
+
+    await supabase.from("capture_intake").insert({
+      user_id: userId,
+      capture_id: capture.id,
+      intake_type: "obsidian_note",
+      title: richInput.note.trim().split("\n")[0]?.slice(0, 90) || "Media capture",
+      source_link: links[0]?.url ?? null,
+      obsidian_target: richInput.obsidianTarget?.trim() || "Inbox",
+      raw_note: richInput.note.trim() || null,
+      links,
+      media_items: mediaItems,
+      payload: {
+        capture_version: 1,
+        source: "focusos.capture",
+        note: richInput.note.trim(),
+        links,
+        media_items: mediaItems,
+      },
+      agent_status: "queued",
+      assistant_source: "Hermes",
+    })
+
     await refresh()
   }
 

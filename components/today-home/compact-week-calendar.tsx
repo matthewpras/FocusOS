@@ -9,10 +9,10 @@ type CompactWeekCalendarProps = {
 }
 
 const toneClass = {
-  blue: "border-[oklch(0.74_0.12_255)] bg-[oklch(0.96_0.025_250)] text-[oklch(0.34_0.16_258)]",
-  violet: "border-[oklch(0.78_0.12_302)] bg-[oklch(0.97_0.026_302)] text-[oklch(0.39_0.15_302)]",
-  green: "border-[oklch(0.78_0.11_155)] bg-[oklch(0.97_0.024_155)] text-[oklch(0.34_0.12_155)]",
-  amber: "border-[oklch(0.82_0.12_80)] bg-[oklch(0.98_0.028_80)] text-[oklch(0.42_0.12_72)]",
+  blue: "border-[oklch(0.63_0.14_255/0.55)] bg-[oklch(0.24_0.07_255)] text-[oklch(0.86_0.07_245)]",
+  violet: "border-[oklch(0.68_0.14_302/0.55)] bg-[oklch(0.24_0.064_302)] text-[oklch(0.88_0.07_302)]",
+  green: "border-[oklch(0.68_0.11_155/0.55)] bg-[oklch(0.23_0.052_155)] text-[oklch(0.86_0.07_155)]",
+  amber: "border-[oklch(0.72_0.12_80/0.55)] bg-[oklch(0.25_0.055_80)] text-[oklch(0.88_0.08_80)]",
 }
 
 export function CompactWeekCalendar({
@@ -22,7 +22,7 @@ export function CompactWeekCalendar({
   return (
     <section
       aria-labelledby="today-calendar-heading"
-      className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-3 text-[var(--today-ink)]"
+      className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-3 text-[var(--today-ink)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]"
     >
       <div className="mb-3 flex items-center justify-between">
         <div>
@@ -38,7 +38,7 @@ export function CompactWeekCalendar({
           {days.map((day) => (
             <div
               key={day.date.toISOString()}
-              className="min-h-40 rounded-md border border-[var(--today-line)] bg-[oklch(0.985_0.006_244)] p-2"
+              className="min-h-40 rounded-md border border-[var(--today-line)] bg-[var(--today-panel)] p-2"
             >
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-xs font-medium text-[var(--today-muted)]">
@@ -67,7 +67,7 @@ export function CompactWeekCalendar({
                     </button>
                   ))
                 ) : (
-                  <div className="rounded-md border border-dashed border-[var(--today-line)] px-2 py-6 text-center text-xs text-[var(--today-muted)]">
+                  <div className="rounded-md border border-dashed border-white/16 bg-black/10 px-2 py-6 text-center text-xs text-[var(--today-muted)]">
                     Open
                   </div>
                 )}
