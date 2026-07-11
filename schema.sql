@@ -71,7 +71,11 @@ create unique index if not exists idx_habits_user_assistant_key on habits (user_
 alter table captures add column if not exists assistant_key text;
 alter table captures add column if not exists assistant_source text;
 alter table captures add column if not exists created_by_assistant boolean not null default false;
+alter table captures add column if not exists obsidian_export_status text check (obsidian_export_status in ('pending','exported','fallback','failed'));
+alter table captures add column if not exists obsidian_exported_at timestamptz;
+alter table captures add column if not exists obsidian_export_path text;
 create unique index if not exists idx_captures_user_assistant_key on captures (user_id, assistant_key) where assistant_key is not null;
+create index if not exists idx_captures_user_obsidian_export on captures (user_id, obsidian_export_status, obsidian_exported_at desc);
 
 create table if not exists external_commitments (
   id uuid primary key default gen_random_uuid(),
@@ -320,6 +324,11 @@ create table if not exists capture_intake (
   obsidian_target text,
   decision_needed boolean not null default false,
   triage_status text not null default 'new' check (triage_status in ('new','reviewed','converted','archived')),
+  raw_note text,
+  links jsonb not null default '[]'::jsonb,
+  media_items jsonb not null default '[]'::jsonb,
+  payload jsonb not null default '{}'::jsonb,
+  agent_status text not null default 'queued' check (agent_status in ('queued','processing','analyzed','synced','failed')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -334,6 +343,7 @@ begin
 end $$;
 create unique index if not exists idx_capture_intake_capture_id on capture_intake (capture_id) where capture_id is not null;
 create index if not exists idx_capture_intake_user_status_created on capture_intake (user_id, triage_status, created_at desc);
+create index if not exists idx_capture_intake_user_agent_status on capture_intake (user_id, agent_status, created_at desc);
 
 create table if not exists board_recommendations (
   id uuid primary key default gen_random_uuid(),

@@ -50,10 +50,56 @@ export type Capture = {
   user_id: string
   text: string
   converted: boolean
+  obsidian_export_status: "pending" | "exported" | "fallback" | "failed" | null
+  obsidian_exported_at: string | null
+  obsidian_export_path: string | null
   assistant_key: string | null
   assistant_source: string | null
   created_by_assistant: boolean
   created_at: string
+}
+
+export type CaptureLink = {
+  url: string
+  kind: "tiktok" | "youtube" | "link" | string
+  title?: string | null
+}
+
+export type CaptureMediaItem = {
+  name: string
+  type: string
+  size: number
+  data_url?: string | null
+}
+
+export type CaptureIntake = {
+  id: string
+  user_id: string
+  capture_id: string | null
+  intake_type: "task" | "event" | "obsidian_note" | "school_item" | "follow_up" | "finance_item" | "automation_idea" | "ignore" | "decision_needed"
+  title: string | null
+  summary: string | null
+  source_link: string | null
+  tags: string[]
+  key_takeaways: unknown[]
+  what_this_means_for_me: string | null
+  obsidian_target: string | null
+  decision_needed: boolean
+  triage_status: "new" | "reviewed" | "converted" | "archived"
+  raw_note: string | null
+  links: CaptureLink[]
+  media_items: CaptureMediaItem[]
+  payload: Record<string, unknown>
+  agent_status: "queued" | "processing" | "analyzed" | "synced" | "failed"
+  created_at: string
+  updated_at: string
+}
+
+export type RichCaptureInput = {
+  note: string
+  links?: CaptureLink[]
+  mediaItems?: CaptureMediaItem[]
+  obsidianTarget?: string
 }
 
 export type AssistantRunStatus =

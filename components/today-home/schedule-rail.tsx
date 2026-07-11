@@ -17,7 +17,7 @@ export function ScheduleRail({ pressure, scheduleRows }: ScheduleRailProps) {
     <aside className="space-y-3 text-[var(--today-ink)]">
       <section
         aria-label="Focus pressure"
-        className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4"
+        className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.2)]"
       >
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -36,10 +36,10 @@ export function ScheduleRail({ pressure, scheduleRows }: ScheduleRailProps) {
           <div
             className="grid size-16 place-items-center rounded-full"
             style={{
-              background: `conic-gradient(${highPressure ? "var(--today-red)" : "var(--today-blue)"} ${pressure.score}%, oklch(0.9 0.012 252) 0)`,
+              background: `conic-gradient(${highPressure ? "var(--today-red)" : "var(--today-blue)"} ${pressure.score}%, oklch(1 0 0 / 12%) 0)`,
             }}
           >
-            <div className="grid size-12 place-items-center rounded-full bg-white text-sm font-semibold tabular-nums">
+            <div className="grid size-12 place-items-center rounded-full bg-[var(--today-panel)] text-sm font-semibold tabular-nums text-[var(--today-ink)]">
               {pressure.score}
             </div>
           </div>
@@ -51,7 +51,7 @@ export function ScheduleRail({ pressure, scheduleRows }: ScheduleRailProps) {
 
       <section
         aria-labelledby="today-schedule-heading"
-        className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)]"
+        className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]"
       >
         <div className="border-b border-[var(--today-line)] px-4 py-3">
           <h2 id="today-schedule-heading" className="text-sm font-semibold">
@@ -63,7 +63,7 @@ export function ScheduleRail({ pressure, scheduleRows }: ScheduleRailProps) {
           <ol className="divide-y divide-[var(--today-line)]">
             {scheduleRows.map((row) => (
               <li key={row.id} className="flex gap-3 px-4 py-3">
-                <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-[oklch(0.95_0.018_250)] text-[var(--today-blue)]">
+                <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md border border-white/10 bg-[var(--today-panel-muted)] text-[oklch(0.82_0.1_245)]">
                   <Clock3 className="size-3.5" />
                 </div>
                 <div className="min-w-0">
