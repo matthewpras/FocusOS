@@ -5,6 +5,13 @@ import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import { buildCaptureText, extractCaptureLinks } from "@/lib/capture-payload"
 import type { Capture, RichCaptureInput } from "@/types"
 
+const capturesChangedEvent = "focusos:captures-changed"
+
+function notifyCapturesChanged() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event(capturesChangedEvent))
+}
+
 export function useCaptures(userId?: string) {
   const [captures, setCaptures] = useState<Capture[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,6 +34,13 @@ export function useCaptures(userId?: string) {
 
   useEffect(() => {
     refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    window.addEventListener(capturesChangedEvent, refresh)
+    return () => {
+      window.removeEventListener(capturesChangedEvent, refresh)
+    }
   }, [refresh])
 
   useEffect(() => {
@@ -103,18 +117,21 @@ export function useCaptures(userId?: string) {
     })
 
     await refresh()
+    notifyCapturesChanged()
   }
 
   async function discardCapture(id: string) {
     if (!supabase) return
     setCaptures((items) => items.filter((capture) => capture.id !== id))
     await supabase.from("captures").delete().eq("id", id)
+    notifyCapturesChanged()
   }
 
   async function markConverted(id: string) {
     if (!supabase) return
     setCaptures((items) => items.filter((capture) => capture.id !== id))
     await supabase.from("captures").update({ converted: true }).eq("id", id)
+    notifyCapturesChanged()
   }
 
   return { captures, loading, addCapture, discardCapture, markConverted, refresh }
