@@ -1,49 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
 import { runAssistant, shouldRunForSchedule } from "@/lib/assistant"
-import { getAllowedEmails } from "@/lib/allowlist"
 import { getBearerToken, verifyAccessToken } from "@/lib/server-auth"
 import { getSupabaseServerAdmin } from "@/lib/supabase-server"
-
-function resolveAutomationEmail() {
-  return (
-    process.env.ASSISTANT_USER_EMAIL ||
-    getAllowedEmails("server")[0] ||
-    null
-  )
-}
-
-async function resolveCronUserId() {
-  const supabase = getSupabaseServerAdmin()
-  const email = resolveAutomationEmail()
-  if (!supabase || !email) return null
-
-  const { data, error } = await supabase.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-  })
-
-  if (error) return null
-  return data.users.find((user) => user.email === email)?.id ?? null
-}
+import { isCronRequest, resolveCronUserId } from "@/lib/cron-user"
 
 async function handleRun(request: NextRequest, trigger: "manual" | "cron") {
   const bearerToken = getBearerToken(request.headers.get("authorization"))
-  const cronSecret = process.env.CRON_SECRET
-  const isCron = Boolean(bearerToken && cronSecret && bearerToken === cronSecret)
+  const isCron = isCronRequest(bearerToken)
 
   let userId: string | null = null
 
   if (isCron) {
-    const shouldRun = await shouldRunForSchedule(new Date())
-    if (!shouldRun) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "Outside configured Focus OS run window.",
-      })
-    }
-
     userId = await resolveCronUserId()
+
+    if (userId) {
+      const supabase = getSupabaseServerAdmin()
+      const sourceState = supabase
+        ? (
+            await supabase
+              .from("assistant_source_states")
+              .select("last_attempted_run_at")
+              .eq("user_id", userId)
+              .maybeSingle()
+          ).data
+        : null
+
+      if (!shouldRunForSchedule(new Date(), sourceState?.last_attempted_run_at ?? null)) {
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Assistant ran recently; skipping until the next scheduled interval.",
+        })
+      }
+    }
   } else if (bearerToken) {
     const verification = await verifyAccessToken(bearerToken)
     if (!verification.ok) {

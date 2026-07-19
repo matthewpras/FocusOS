@@ -4,8 +4,10 @@ import { ImagePlus, Link2, Send, X } from "lucide-react"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { detectLinkKind, extractCaptureLinks } from "@/lib/capture-payload"
+import { OBSIDIAN_CUSTOM_FOLDER_VALUE, OBSIDIAN_FOLDER_OPTIONS } from "@/lib/obsidian-folders"
 import type { CaptureLink, CaptureMediaItem, RichCaptureInput } from "@/types"
 
 type CaptureComposerProps = {
@@ -218,13 +220,39 @@ export function CaptureComposer({
       ) : null}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <Input
-          aria-label="Obsidian folder"
-          value={obsidianTarget}
-          onChange={(event) => setObsidianTarget(event.target.value)}
-          placeholder="Obsidian folder"
-          className="border-[var(--today-line)] bg-[var(--today-panel)]"
-        />
+        <div className="flex gap-2">
+          <Select
+            value={
+              (OBSIDIAN_FOLDER_OPTIONS as readonly string[]).includes(obsidianTarget)
+                ? obsidianTarget
+                : OBSIDIAN_CUSTOM_FOLDER_VALUE
+            }
+            onValueChange={(value) =>
+              setObsidianTarget(!value || value === OBSIDIAN_CUSTOM_FOLDER_VALUE ? "" : value)
+            }
+          >
+            <SelectTrigger aria-label="Obsidian folder" className="border-[var(--today-line)] bg-[var(--today-panel)]">
+              <SelectValue placeholder="Obsidian folder" />
+            </SelectTrigger>
+            <SelectContent>
+              {OBSIDIAN_FOLDER_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+              <SelectItem value={OBSIDIAN_CUSTOM_FOLDER_VALUE}>Custom...</SelectItem>
+            </SelectContent>
+          </Select>
+          {!(OBSIDIAN_FOLDER_OPTIONS as readonly string[]).includes(obsidianTarget) ? (
+            <Input
+              aria-label="Custom Obsidian folder"
+              value={obsidianTarget}
+              onChange={(event) => setObsidianTarget(event.target.value)}
+              placeholder="Folder name"
+              className="border-[var(--today-line)] bg-[var(--today-panel)]"
+            />
+          ) : null}
+        </div>
         <input
           ref={fileInputRef}
           type="file"

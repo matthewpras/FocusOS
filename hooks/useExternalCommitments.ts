@@ -24,7 +24,7 @@ export function useExternalCommitments(userId?: string) {
         .select("*")
         .eq("source", "google_calendar")
         .order("starts_at", { ascending: true, nullsFirst: false })
-        .limit(20),
+        .limit(150),
       supabase
         .from("external_commitments")
         .select("*")

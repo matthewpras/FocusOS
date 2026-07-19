@@ -10,11 +10,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
-import type { Capture } from "@/types"
+import type { Capture, CaptureIntake } from "@/types"
+
+type ArchiveCapture = Capture & { title: string | null; summary: string | null }
 
 export default function CapturesPage() {
   const { user } = useAuth()
-  const [captures, setCaptures] = useState<Capture[]>([])
+  const [captures, setCaptures] = useState<ArchiveCapture[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
@@ -29,14 +31,23 @@ export default function CapturesPage() {
     setLoading(true)
     const { data, error: fetchError } = await supabase
       .from("captures")
-      .select("*")
+      .select("*, capture_intake(title,summary)")
       .order("created_at", { ascending: false })
       .limit(500)
     if (fetchError) {
       setError("Couldn't load captures.")
     } else {
       setError(null)
-      setCaptures((data ?? []) as Capture[])
+      type IntakeFields = Pick<CaptureIntake, "title" | "summary">
+      type Row = Capture & { capture_intake: IntakeFields[] | IntakeFields | null }
+      const rows = (data ?? []) as Row[]
+      setCaptures(
+        rows.map((row) => {
+          const { capture_intake, ...capture } = row
+          const intake = Array.isArray(capture_intake) ? capture_intake[0] : capture_intake
+          return { ...capture, title: intake?.title ?? null, summary: intake?.summary ?? null }
+        }),
+      )
     }
     setLoading(false)
   }, [supabase, user?.id])
@@ -48,7 +59,12 @@ export default function CapturesPage() {
   const filtered = useMemo(() => {
     if (!query) return captures
     const needle = query.toLowerCase()
-    return captures.filter((capture) => capture.text.toLowerCase().includes(needle))
+    return captures.filter(
+      (capture) =>
+        capture.text.toLowerCase().includes(needle) ||
+        capture.title?.toLowerCase().includes(needle) ||
+        capture.summary?.toLowerCase().includes(needle),
+    )
   }, [captures, query])
 
   function toggleSelected(id: string) {
@@ -119,7 +135,14 @@ export default function CapturesPage() {
               </label>
               <div className="min-w-0 flex-1 rounded-md bg-[var(--today-panel)] p-3 text-[var(--today-ink)]">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm">{capture.text}</p>
+                  <div className="min-w-0 flex-1">
+                    {capture.title ? (
+                      <p className="text-sm font-medium">{capture.title}</p>
+                    ) : null}
+                    <p className="min-w-0 whitespace-pre-wrap text-sm text-[var(--today-muted)]">
+                      {capture.summary ?? capture.text}
+                    </p>
+                  </div>
                   <span
                     className={
                       capture.converted

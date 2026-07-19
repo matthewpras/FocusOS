@@ -6,6 +6,7 @@ import { ASSISTANT_MODEL, getOpenRouterClient, stripJsonFences } from "@/lib/ope
 import { google } from "googleapis"
 import { getGoogleAuthClient, runAssistant } from "@/lib/assistant"
 import { computeCurrentStreak } from "@/lib/streak"
+import { extractCaptureLinks } from "@/lib/capture-payload"
 
 const SYSTEM_PROMPT = `You are Hermes, Matthew's personal productivity assistant inside Focus OS.
 Chat with him directly and use the provided tools to read and act on his real tasks, captures, habits, and calendar — never invent data, always call a tool to check before answering questions about his state.
@@ -296,12 +297,32 @@ async function executeTool(
       return { ok: true }
     }
     case "create_capture": {
+      const text = String(args.text ?? "").trim()
+      if (!text) throw new Error("create_capture requires non-empty text.")
+
       const { data, error } = await supabase
         .from("captures")
-        .insert({ user_id: userId, text: String(args.text ?? "").trim(), obsidian_export_status: "pending" })
+        .insert({ user_id: userId, text, obsidian_export_status: "pending" })
         .select("id")
         .single()
       if (error) throw error
+
+      const links = extractCaptureLinks([text])
+      const { error: intakeError } = await supabase.from("capture_intake").insert({
+        user_id: userId,
+        capture_id: data?.id,
+        intake_type: "obsidian_note",
+        title: text.split("\n")[0]?.slice(0, 90) || "Capture",
+        source_link: links[0]?.url ?? null,
+        obsidian_target: "Inbox",
+        raw_note: text,
+        links,
+        media_items: [],
+        payload: { capture_version: 1, source: "focusos.chat", note: text, links, media_items: [] },
+        agent_status: "queued",
+      })
+      if (intakeError) console.error("Failed to create capture_intake row from chat", intakeError)
+
       await logAgentEvent(supabase, userId, "create_capture", "success", `Created capture via chat.`, "captures", data?.id)
       return { ok: true, id: data?.id }
     }

@@ -1,4 +1,5 @@
 import { google } from "googleapis"
+import * as ical from "node-ical"
 import type {
   AssistantBrief,
   AssistantRunStatus,
@@ -47,7 +48,8 @@ type AssistantResult = {
   sources: Record<string, SourceReport>
 }
 
-const ACTIVE_HOURS = new Set([6, 10, 14, 18, 22])
+// Hourly 6am-10pm ET — matches the GitHub Actions cron cadence.
+const ACTIVE_HOURS = new Set([6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22])
 
 function getTimeZone() {
   return process.env.GOOGLE_TIMEZONE || "America/New_York"
@@ -86,8 +88,123 @@ function startOfWindowIso(date: Date) {
   return new Date(date.getTime() - 6 * 60 * 60 * 1000).toISOString()
 }
 
+function getCalendarLookaheadDays() {
+  const raw = Number(process.env.GOOGLE_CALENDAR_LOOKAHEAD_DAYS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 10
+}
+
 function endOfWindowIso(date: Date) {
-  return new Date(date.getTime() + 54 * 60 * 60 * 1000).toISOString()
+  return new Date(date.getTime() + getCalendarLookaheadDays() * 24 * 60 * 60 * 1000).toISOString()
+}
+
+function getCalendarIds() {
+  const raw = process.env.GOOGLE_CALENDAR_ID || "primary"
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+  may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+}
+
+function nextWeekdayDate(now: Date, targetDow: number, timeZone: string) {
+  const parts = toDateParts(now, timeZone)
+  const base = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`)
+  const diff = (targetDow - base.getDay() + 7) % 7
+  base.setDate(base.getDate() + diff)
+  return base
+}
+
+/**
+ * Looks for a deadline near words like "due"/"by"/"deadline" in short email
+ * text (subject + snippet). Only used to promote an email to a task/calendar
+ * entry with a real due date instead of defaulting to "today".
+ */
+function extractDeadline(text: string, now: Date, timeZone = getTimeZone()): string | null {
+  const lower = text.toLowerCase()
+  const triggerRegex = /\b(due|deadline|expires?|closes?|submit(?:ted)?\s+by|respond\s+by|renew\s+by|by)\b/g
+  const monthNamePattern = new RegExp(
+    `\\b(${Object.keys(MONTH_MAP).join("|")})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?`,
+  )
+
+  let match: RegExpExecArray | null
+  while ((match = triggerRegex.exec(lower))) {
+    const windowText = lower.slice(match.index, match.index + 60)
+    const currentYear = Number(toDateParts(now, timeZone).year)
+
+    const slashDate = windowText.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
+    if (slashDate) {
+      const month = Number(slashDate[1])
+      const day = Number(slashDate[2])
+      const yearRaw = slashDate[3]
+      const year = yearRaw ? (yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw)) : currentYear
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      }
+    }
+
+    const monthDate = windowText.match(monthNamePattern)
+    if (monthDate) {
+      const monthIndex = MONTH_MAP[monthDate[1]]
+      const day = Number(monthDate[2])
+      const year = monthDate[3] ? Number(monthDate[3]) : currentYear
+      if (day >= 1 && day <= 31) {
+        return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      }
+    }
+
+    if (/\btomorrow\b/.test(windowText)) {
+      return formatDateKey(new Date(now.getTime() + 24 * 60 * 60 * 1000), timeZone)
+    }
+
+    if (/\b(today|eod|end of day)\b/.test(windowText)) {
+      return formatDateKey(now, timeZone)
+    }
+
+    if (/\b(end of week|eow)\b/.test(windowText)) {
+      return formatDateKey(nextWeekdayDate(now, 5, timeZone), timeZone)
+    }
+
+    const weekdayMatch = windowText.match(
+      /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/,
+    )
+    if (weekdayMatch) {
+      const targetDow = WEEKDAYS.indexOf(weekdayMatch[1])
+      return formatDateKey(nextWeekdayDate(now, targetDow, timeZone), timeZone)
+    }
+  }
+
+  return null
+}
+
+const JUNK_SENDER_PATTERN =
+  /(no-?reply|noreply|do-?not-?reply|notifications?@|newsletter|marketing@|mailer@|updates@|news@|digest@|promo@|hello@|team@.*\.(io|co|com)$)/i
+
+const JUNK_CONTENT_PATTERN =
+  /(unsubscribe|view (this )?(email )?in (your )?browser|% off|limited time offer|shop now|flash sale|webinar invite|refer a friend|free shipping|exclusive deal|abandoned cart)/i
+
+// Retail/shipping receipts — distinct from marketing junk because senders
+// (Amazon, Chewy, etc.) rarely match JUNK_SENDER_PATTERN, but the content
+// shape is unmistakable and Matthew never wants these as tasks.
+const COMMERCE_NOISE_PATTERN =
+  /(^shipped:|^ordered:|^delivered:|out for delivery|arriving (today|tomorrow)|order confirmation|order #\s*\d|tracking number|track(ing)? your (order|package)|your (amazon|order|package) (has|is)|return (confirmed|initiated|complete)|refund (issued|initiated|complete))/i
+
+// Personal time-bound commitments that must never get swept up as junk or
+// commerce noise, even if the sender looks like a "noreply@" notification
+// system (most appointment reminders are).
+const IMPORTANT_SIGNAL_PATTERN =
+  /(appointment|reservation|check-?in|boarding pass|itinerary|prescription (is )?ready|pickup (is )?ready)/i
+
+function isLikelyJunkMail(from: string, subject: string, snippet: string) {
+  const text = `${subject} ${snippet}`
+  if (IMPORTANT_SIGNAL_PATTERN.test(text)) return false
+  return JUNK_SENDER_PATTERN.test(from) || JUNK_CONTENT_PATTERN.test(text) || COMMERCE_NOISE_PATTERN.test(text)
 }
 
 function formatReadableTime(iso: string | null) {
@@ -136,7 +253,7 @@ function needsEventTask(title: string, details: string | null) {
 }
 
 function feelsActionable(text: string) {
-  return /(reply|respond|follow up|follow-up|send|review|deadline|confirm|pay|ship|schedule|book|submit)/i.test(
+  return /(reply|respond|follow up|follow-up|send|review|deadline|confirm|pay|appointment|reservation|schedule|book|submit)/i.test(
     text,
   )
 }
@@ -249,9 +366,9 @@ export function getGoogleAuthClient() {
 
 async function fetchCalendarCommitments(now: Date) {
   const auth = getGoogleAuthClient()
-  const calendarId = process.env.GOOGLE_CALENDAR_ID
+  const calendarIds = getCalendarIds()
 
-  if (!auth || !calendarId) {
+  if (!auth || !calendarIds.length) {
     return {
       commitments: [] as Commitment[],
       report: {
@@ -265,44 +382,52 @@ async function fetchCalendarCommitments(now: Date) {
 
   try {
     const calendar = google.calendar({ version: "v3", auth })
-    const { data } = await calendar.events.list({
-      calendarId,
-      singleEvents: true,
-      orderBy: "startTime",
-      timeMin: startOfWindowIso(now),
-      timeMax: endOfWindowIso(now),
-      maxResults: 25,
-      timeZone: getTimeZone(),
-    })
 
-    const commitments: Commitment[] = (data.items ?? [])
-      .filter((item) => item.id && item.summary)
-      .map((item) => {
-        const details = normalizeText(item.description ?? "")
-        return {
-          source: "google_calendar",
-          sourceId: item.id!,
-          title: normalizeText(item.summary!),
-          details: details || null,
-          startsAt: item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T09:00:00` : null),
-          dueDate: item.start?.date ?? null,
-          confidence: 0.96,
-          actionHint: needsEventTask(item.summary!, details) ? "Create prep task" : "Block focus around this",
-          actionable: needsEventTask(item.summary!, details),
-          captureOnly: false,
-          payload: {
-            htmlLink: item.htmlLink ?? null,
-            status: item.status ?? null,
-          },
-        }
-      })
+    const perCalendar = await Promise.all(
+      calendarIds.map(async (calendarId) => {
+        const { data } = await calendar.events.list({
+          calendarId,
+          singleEvents: true,
+          orderBy: "startTime",
+          timeMin: startOfWindowIso(now),
+          timeMax: endOfWindowIso(now),
+          maxResults: 50,
+          timeZone: getTimeZone(),
+        })
+
+        return (data.items ?? [])
+          .filter((item) => item.id && item.summary)
+          .map((item): Commitment => {
+            const details = normalizeText(item.description ?? "")
+            return {
+              source: "google_calendar",
+              sourceId: `${calendarId}:${item.id!}`,
+              title: normalizeText(item.summary!),
+              details: details || null,
+              startsAt: item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T09:00:00` : null),
+              dueDate: item.start?.date ?? null,
+              confidence: 0.96,
+              actionHint: needsEventTask(item.summary!, details) ? "Create prep task" : "Block focus around this",
+              actionable: needsEventTask(item.summary!, details),
+              captureOnly: false,
+              payload: {
+                calendarId,
+                htmlLink: item.htmlLink ?? null,
+                status: item.status ?? null,
+              },
+            }
+          })
+      }),
+    )
+
+    const commitments = perCalendar.flat()
 
     return {
       commitments,
       report: {
         state: "connected" as const,
         syncedAt: new Date().toISOString(),
-        note: `${commitments.length} events checked.`,
+        note: `${commitments.length} events checked across ${calendarIds.length} calendar(s).`,
         count: commitments.length,
       },
     }
@@ -319,7 +444,7 @@ async function fetchCalendarCommitments(now: Date) {
   }
 }
 
-async function fetchGmailCommitments() {
+async function fetchGmailCommitments(now: Date) {
   const auth = getGoogleAuthClient()
 
   if (!auth) {
@@ -343,7 +468,7 @@ async function fetchGmailCommitments() {
     const { data } = await gmail.users.messages.list({
       userId: "me",
       q: query,
-      maxResults: 10,
+      maxResults: 20,
     })
 
     const messages = await Promise.all(
@@ -358,32 +483,66 @@ async function fetchGmailCommitments() {
       }),
     )
 
-    const commitments: Commitment[] = messages
-      .filter((message) => message.id)
-      .map((message) => {
-        const headers = Object.fromEntries(
-          (message.payload?.headers ?? []).map((header) => [header.name ?? "", header.value ?? ""]),
-        )
-        const subject = normalizeText(headers.Subject || message.snippet || "Email follow-up")
-        const details = normalizeText(`${headers.From || ""} ${message.snippet || ""}`)
-        const actionable = feelsActionable(`${subject} ${details}`)
-        return {
-          source: "gmail",
-          sourceId: message.id!,
-          title: subject,
-          details: details || null,
-          startsAt: null,
-          dueDate: null,
-          confidence: actionable ? 0.78 : 0.52,
-          actionHint: actionable ? "Create follow-up task" : "Review in inbox",
-          actionable,
-          captureOnly: !actionable,
-          payload: {
-            threadId: message.threadId ?? null,
-            internalDate: message.internalDate ?? null,
-          },
-        }
+    const commitments: Commitment[] = []
+
+    for (const message of messages) {
+      if (!message.id) continue
+
+      const headers = Object.fromEntries(
+        (message.payload?.headers ?? []).map((header) => [header.name ?? "", header.value ?? ""]),
+      )
+      const from = headers.From || ""
+      const subject = normalizeText(headers.Subject || message.snippet || "Email follow-up")
+      const snippet = message.snippet || ""
+      const deadline = extractDeadline(`${subject} ${snippet}`, now)
+
+      // Junk (marketing/no-reply) still gets skipped even if it happens to
+      // contain "by"/"due"-shaped text, unless it has a real detected deadline.
+      if (isLikelyJunkMail(from, subject, snippet) && !deadline) continue
+
+      const details = normalizeText(`${from} ${snippet}`)
+      const actionable = Boolean(deadline) || feelsActionable(`${subject} ${details}`)
+
+      commitments.push({
+        source: "gmail",
+        sourceId: message.id,
+        title: subject,
+        details: details || null,
+        startsAt: null,
+        dueDate: deadline,
+        confidence: deadline ? 0.9 : actionable ? 0.78 : 0.52,
+        actionHint: deadline
+          ? "Deadline found — added to tasks & calendar"
+          : actionable
+            ? "Create follow-up task"
+            : "Review in inbox",
+        actionable,
+        captureOnly: !actionable,
+        payload: {
+          threadId: message.threadId ?? null,
+          internalDate: message.internalDate ?? null,
+        },
       })
+
+      if (deadline) {
+        commitments.push({
+          source: "google_calendar",
+          sourceId: `gmail-deadline:${message.id}`,
+          title: `Deadline: ${subject}`,
+          details: details || null,
+          startsAt: `${deadline}T09:00:00`,
+          dueDate: deadline,
+          confidence: 0.9,
+          actionHint: "Detected from email",
+          actionable: false,
+          captureOnly: true,
+          payload: {
+            fromEmail: true,
+            sourceMessageId: message.id,
+          },
+        })
+      }
+    }
 
     return {
       commitments,
@@ -478,6 +637,117 @@ async function fetchDriveCommitments(now: Date) {
   }
 }
 
+function icsText(value: ical.ParameterValue | undefined): string {
+  if (!value) return ""
+  return typeof value === "string" ? value : value.val
+}
+
+function getIcsFeedUrls() {
+  const raw = process.env.ICS_CALENDAR_URLS || ""
+  return raw
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Pulls shift/schedule calendars (e.g. StaffReady) straight from their ICS
+ * feed instead of through a Google-subscribed copy, which only refreshes
+ * on Google's own schedule (often 12-24h stale for shift changes).
+ */
+async function fetchIcsCommitments(now: Date) {
+  const urls = getIcsFeedUrls()
+
+  if (!urls.length) {
+    return {
+      commitments: [] as Commitment[],
+      report: {
+        state: "skipped" as const,
+        syncedAt: null,
+        note: "No ICS feeds configured.",
+        count: 0,
+      },
+    }
+  }
+
+  const windowStart = new Date(startOfWindowIso(now))
+  const windowEnd = new Date(endOfWindowIso(now))
+
+  try {
+    const perFeed = await Promise.all(
+      urls.map(async (url, feedIndex) => {
+        const data = await ical.async.fromURL(url)
+
+        return Object.values(data)
+          .filter((item): item is ical.VEvent => item != null && item.type === "VEVENT")
+          .filter((item) => item.start instanceof Date && item.start >= windowStart && item.start <= windowEnd)
+          .map((item): Commitment => {
+            const title = normalizeText(icsText(item.summary) || "Shift")
+            const details = normalizeText(icsText(item.description))
+            const uid = item.uid || `${item.start!.toISOString()}-${title}`
+
+            return {
+              source: "google_calendar",
+              sourceId: `ics:${feedIndex}:${uid}`,
+              title,
+              details: details || null,
+              startsAt: item.start!.toISOString(),
+              dueDate: null,
+              confidence: 0.9,
+              actionHint: "Synced schedule shift",
+              actionable: false,
+              captureOnly: false,
+              payload: {
+                icsFeedIndex: feedIndex,
+                location: item.location ?? null,
+              },
+            }
+          })
+      }),
+    )
+
+    const commitments = perFeed.flat()
+
+    return {
+      commitments,
+      report: {
+        state: "connected" as const,
+        syncedAt: new Date().toISOString(),
+        note: `${commitments.length} shifts synced from ${urls.length} ICS feed(s).`,
+        count: commitments.length,
+      },
+    }
+  } catch (error) {
+    return {
+      commitments: [] as Commitment[],
+      report: {
+        state: "failed" as const,
+        syncedAt: null,
+        note: error instanceof Error ? error.message : "ICS feed fetch failed.",
+        count: 0,
+      },
+    }
+  }
+}
+
+function mergeCalendarReports(calendarReport: SourceReport, icsReport: SourceReport): SourceReport {
+  const state: SourceState =
+    calendarReport.state === "connected" || icsReport.state === "connected"
+      ? "connected"
+      : calendarReport.state === "failed" || icsReport.state === "failed"
+        ? "failed"
+        : "skipped"
+
+  return {
+    state,
+    syncedAt: icsReport.syncedAt ?? calendarReport.syncedAt,
+    note: [calendarReport.note, icsReport.state !== "skipped" ? icsReport.note : null]
+      .filter(Boolean)
+      .join(" "),
+    count: calendarReport.count + icsReport.count,
+  }
+}
+
 async function upsertExternalCommitments(userId: string, commitments: Commitment[]) {
   const supabase = getSupabaseServerAdmin()
   if (!supabase || !commitments.length) return
@@ -497,6 +767,25 @@ async function upsertExternalCommitments(userId: string, commitments: Commitment
     })),
     { onConflict: "user_id,source,source_id" },
   )
+}
+
+/**
+ * Upsert never removes rows, so without this, past calendar events pile up
+ * forever and "order by starts_at ascending" stays stuck on ancient events
+ * instead of advancing. Runs every assistant cycle.
+ */
+async function cleanupStaleCommitments(userId: string, now: Date) {
+  const supabase = getSupabaseServerAdmin()
+  if (!supabase) return
+
+  const cutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString()
+
+  await supabase
+    .from("external_commitments")
+    .delete()
+    .eq("user_id", userId)
+    .not("starts_at", "is", null)
+    .lt("starts_at", cutoff)
 }
 
 async function ensureTask(
@@ -606,8 +895,11 @@ async function ensureHabit(
   return true
 }
 
-export async function shouldRunForSchedule(now = new Date()) {
-  return ACTIVE_HOURS.has(getLocalHour(now))
+const MIN_RUN_INTERVAL_MS = 55 * 60 * 1000
+
+export function shouldRunForSchedule(now: Date, lastAttemptedRunAt: string | null) {
+  if (!lastAttemptedRunAt) return true
+  return now.getTime() - new Date(lastAttemptedRunAt).getTime() >= MIN_RUN_INTERVAL_MS
 }
 
 export async function runAssistant(userId: string, triggerSource: AssistantTriggerSource) {
@@ -639,17 +931,24 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
   const latestBrief = latestBriefResult.data as AssistantBrief | null
   const previousSourceState = sourceStateResult.data as AssistantSourceState | null
 
-  const [calendarResult, gmailResult, driveResult] = await Promise.all([
+  const [calendarApiResult, gmailResult, driveResult, icsResult] = await Promise.all([
     fetchCalendarCommitments(startedAt),
-    fetchGmailCommitments(),
+    fetchGmailCommitments(startedAt),
     fetchDriveCommitments(startedAt),
+    fetchIcsCommitments(startedAt),
   ])
+
+  const calendarResult = {
+    commitments: [...calendarApiResult.commitments, ...icsResult.commitments],
+    report: mergeCalendarReports(calendarApiResult.report, icsResult.report),
+  }
 
   const commitments = [...calendarResult.commitments, ...gmailResult.commitments, ...driveResult.commitments]
   await upsertExternalCommitments(userId, commitments)
+  await cleanupStaleCommitments(userId, startedAt)
 
   const changes: string[] = []
-  const errors = [calendarResult.report, gmailResult.report, driveResult.report]
+  const errors = [calendarApiResult.report, gmailResult.report, driveResult.report, icsResult.report]
     .filter((source) => source.state === "failed")
     .map((source) => source.note)
 

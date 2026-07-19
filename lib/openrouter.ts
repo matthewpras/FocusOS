@@ -2,6 +2,10 @@ import OpenAI from "openai"
 
 export const ASSISTANT_MODEL = process.env.OPENROUTER_MODEL || "anthropic/claude-haiku-4.5"
 
+// Capture enrichment (long transcripts, dense articles) needs stronger reasoning and a bigger
+// output budget than the chat/brief paths above, so it gets its own model override.
+export const ENRICHMENT_MODEL = process.env.OPENROUTER_ENRICHMENT_MODEL || "anthropic/claude-sonnet-4.5"
+
 export function hasOpenRouterEnv() {
   return Boolean(process.env.OPENROUTER_API_KEY)
 }

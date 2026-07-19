@@ -3,10 +3,11 @@ name: Focus OS Assistant
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is UTC. These two schedules cover Eastern daylight and
-    # standard time; the app route only runs at the configured local hours.
-    - cron: "0 2,10,14,18,22 * * *"
-    - cron: "0 3,11,15,19,23 * * *"
+    # GitHub cron is UTC. Hourly 6am-10pm Eastern. Two schedules cover
+    # daylight and standard time (they overlap for most hours across the
+    # DST boundary — the app's 55-min throttle absorbs any double-fires).
+    - cron: "0 0-2,10-23 * * *"
+    - cron: "0 0-3,11-23 * * *"
 
 jobs:
   run-assistant:

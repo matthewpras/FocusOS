@@ -1,9 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { NextRequest, NextResponse } from "next/server"
-import { buildCaptureExport, getObsidianStatus } from "@/lib/obsidian-export"
+import { writeCaptureNote, buildCaptureExport, getObsidianStatus } from "@/lib/obsidian-export"
+import { enrichCaptureIntake, type CaptureIntakeRow } from "@/lib/capture-enrichment"
 import { getSupabaseServerAdmin } from "@/lib/supabase-server"
 import { getBearerToken, verifyAccessToken } from "@/lib/server-auth"
+import type { CaptureLink } from "@/types"
 
 type ExportBody = {
   target?: "capture" | "brief"
@@ -17,17 +19,6 @@ function getVaultPath() {
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10)
-}
-
-async function appendMarkdown(filePath: string, content: string) {
-  await mkdir(path.dirname(filePath), { recursive: true })
-
-  try {
-    const existing = await readFile(filePath, "utf8")
-    await writeFile(filePath, `${existing.trimEnd()}\n\n${content}\n`)
-  } catch {
-    await writeFile(filePath, `${content}\n`)
-  }
 }
 
 async function verifyRequest(request: NextRequest) {
@@ -78,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const { data: capture } = await supabase
       .from("captures")
-      .select("id,text,created_at")
+      .select("id,text,created_at,obsidian_export_path")
       .eq("user_id", verification.user.id)
       .eq("id", body.captureId)
       .maybeSingle()
@@ -87,33 +78,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Capture not found." }, { status: 404 })
     }
 
-    const { data: intake } = await supabase
+    let { data: intake } = await supabase
       .from("capture_intake")
-      .select("obsidian_target,links,media_items,agent_status")
+      .select("id,user_id,capture_id,raw_note,links,media_items,payload,obsidian_target,agent_status,title,summary,tags,key_takeaways,what_this_means_for_me")
       .eq("user_id", verification.user.id)
       .eq("capture_id", body.captureId)
       .maybeSingle()
 
+    let enrichedLinks: CaptureLink[] = Array.isArray(intake?.links) ? intake.links : []
+
+    // Give the capture skill a chance to synthesize a title/summary before this write is the
+    // permanent record in the vault, so we don't export a bare "Capture - <timestamp>" heading.
+    if (intake && intake.agent_status !== "analyzed" && intake.agent_status !== "synced") {
+      const result = await enrichCaptureIntake(supabase, intake as CaptureIntakeRow)
+      if (result.ok) {
+        enrichedLinks = enrichedLinks.map((link) => {
+          const fetched = result.linkContents.find((content) => content.url === link.url)
+          return fetched?.title ? { ...link, title: fetched.title } : link
+        })
+        const { data: refreshed } = await supabase
+          .from("capture_intake")
+          .select("id,user_id,capture_id,raw_note,links,media_items,payload,obsidian_target,agent_status,title,summary,tags,key_takeaways,what_this_means_for_me")
+          .eq("id", intake.id)
+          .maybeSingle()
+        if (refreshed) intake = refreshed
+      }
+    }
+
     const exportItem = buildCaptureExport(
       {
         ...capture,
-        links: Array.isArray(intake?.links) ? intake.links : [],
+        links: enrichedLinks,
         media_items: Array.isArray(intake?.media_items) ? intake.media_items : [],
         intake: intake
           ? {
               obsidian_target: intake.obsidian_target,
               agent_status: intake.agent_status,
+              title: intake.title,
+              summary: intake.summary,
+              tags: intake.tags,
+              key_takeaways: intake.key_takeaways,
+              what_this_means_for_me: intake.what_this_means_for_me,
             }
           : null,
       },
       {
         vaultPath,
         target: body.obsidianTarget ?? intake?.obsidian_target,
+        previousFilePath: capture.obsidian_export_path,
       },
     )
 
     if (exportItem.filePath) {
-      await appendMarkdown(exportItem.filePath, exportItem.markdown)
+      await writeCaptureNote(exportItem.filePath, exportItem.markdown, capture.obsidian_export_path)
     }
 
     await supabase
@@ -129,7 +146,11 @@ export async function POST(request: NextRequest) {
     await supabase
       .from("capture_intake")
       .update({
-        agent_status: exportItem.filePath ? "synced" : "queued",
+        agent_status: exportItem.filePath
+          ? "synced"
+          : intake?.agent_status === "analyzed"
+            ? "analyzed"
+            : "queued",
         obsidian_target: body.obsidianTarget ?? intake?.obsidian_target ?? null,
       })
       .eq("user_id", verification.user.id)

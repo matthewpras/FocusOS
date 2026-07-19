@@ -63,10 +63,10 @@ After deploy, set same env vars in Vercel project settings, then redeploy.
 ## Assistant Automation
 
 - Home includes assistant summary card with latest brief, priorities, focus block, risks, and manual run button.
-- `GET /api/assistant/run` is external scheduler target. Route only executes during `6 AM / 10 AM / 2 PM / 6 PM / 10 PM` Eastern.
+- `GET /api/assistant/run` is external scheduler target. GitHub Actions pings it hourly, 6 AM-10 PM Eastern; the route itself throttles to one real run per 55 minutes (`MIN_RUN_INTERVAL_MS` in `lib/assistant.ts`), so pings outside that window or too close together are cheap no-ops.
 - `POST /api/assistant/run` runs assistant manually for signed-in allowed user.
 - Before first run, apply updated `schema.sql`, add env vars above, and add `CRON_SECRET` in Vercel project settings.
-- Vercel Hobby cron only supports daily cadence, so use GitHub Actions or another external scheduler for 4-hour automation.
+- Vercel Hobby cron only supports daily cadence, so use GitHub Actions or another external scheduler for hourly automation.
 - Scheduler request:
 
 ```txt

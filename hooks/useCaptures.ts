@@ -4,9 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import { buildCaptureText, extractCaptureLinks } from "@/lib/capture-payload"
 import { scheduleUndo } from "@/lib/undo-manager"
-import type { Capture, RichCaptureInput } from "@/types"
+import type { Capture, CaptureIntake, RichCaptureInput } from "@/types"
 
 const capturesChangedEvent = "focusos:captures-changed"
+
+export type CaptureWithStatus = Capture & {
+  agentStatus: CaptureIntake["agent_status"] | null
+  title: string | null
+  summary: string | null
+  tags: string[]
+  keyTakeaways: string[]
+  whatThisMeansForMe: string | null
+}
 
 function notifyCapturesChanged() {
   if (typeof window === "undefined") return
@@ -14,7 +23,7 @@ function notifyCapturesChanged() {
 }
 
 export function useCaptures(userId?: string) {
-  const [captures, setCaptures] = useState<Capture[]>([])
+  const [captures, setCaptures] = useState<CaptureWithStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = getSupabaseBrowser()
@@ -28,15 +37,35 @@ export function useCaptures(userId?: string) {
     setLoading(true)
     const { data, error: fetchError } = await supabase
       .from("captures")
-      .select("*")
+      .select(
+        "*, capture_intake(agent_status,title,summary,tags,key_takeaways,what_this_means_for_me)",
+      )
       .eq("converted", false)
       .order("created_at", { ascending: false })
     if (fetchError) {
       setError("Couldn't load captures.")
     } else {
       setError(null)
-      const rows = (data ?? []) as Capture[]
-      setCaptures(rows.filter((capture) => !pendingDiscardIds.current.has(capture.id)))
+      type IntakeFields = Pick<
+        CaptureIntake,
+        "agent_status" | "title" | "summary" | "tags" | "key_takeaways" | "what_this_means_for_me"
+      >
+      type Row = Capture & { capture_intake: IntakeFields[] | IntakeFields | null }
+      const rows = (data ?? []) as Row[]
+      const withStatus: CaptureWithStatus[] = rows.map((row) => {
+        const { capture_intake, ...capture } = row
+        const intake = Array.isArray(capture_intake) ? capture_intake[0] : capture_intake
+        return {
+          ...capture,
+          agentStatus: intake?.agent_status ?? null,
+          title: intake?.title ?? null,
+          summary: intake?.summary ?? null,
+          tags: intake?.tags ?? [],
+          keyTakeaways: (intake?.key_takeaways as string[] | undefined) ?? [],
+          whatThisMeansForMe: intake?.what_this_means_for_me ?? null,
+        }
+      })
+      setCaptures(withStatus.filter((capture) => !pendingDiscardIds.current.has(capture.id)))
     }
     setLoading(false)
   }, [supabase, userId])
@@ -102,7 +131,9 @@ export function useCaptures(userId?: string) {
       .select("id")
       .single()
 
-    if (error || !capture) return
+    if (error || !capture) {
+      throw new Error(error?.message || "Could not save capture.")
+    }
 
     const { error: intakeError } = await supabase.from("capture_intake").insert({
       user_id: userId,
