@@ -34,7 +34,7 @@ export function CaptureModal({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="border-white/[0.1] bg-[#101010]/95 text-white backdrop-blur-xl sm:max-w-2xl">
+      <DialogContent className="border-[var(--today-line)] bg-[var(--today-sidebar)]/95 text-[var(--today-ink)] backdrop-blur-xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Hermes capture</DialogTitle>
         </DialogHeader>

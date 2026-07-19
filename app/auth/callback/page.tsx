@@ -64,10 +64,10 @@ export default function AuthCallbackPage() {
   }, [router])
 
   return (
-    <main className="grid min-h-screen place-items-center bg-background px-4 text-white">
-      <section className="w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 text-center backdrop-blur-xl">
+    <main className="grid min-h-screen place-items-center bg-[var(--today-bg)] px-4 text-[var(--today-ink)]">
+      <section className="w-full max-w-md rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-6 text-center backdrop-blur-xl">
         <h1 className="text-xl font-semibold">{error ? "Sign-in failed" : "Signing in..."}</h1>
-        <p className="mt-2 text-sm text-white/60">
+        <p className="mt-2 text-sm text-[var(--today-muted)]">
           {error ?? "Completing your secure login."}
         </p>
         {error ? (

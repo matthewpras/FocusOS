@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import { buildCaptureText, extractCaptureLinks } from "@/lib/capture-payload"
+import { scheduleUndo } from "@/lib/undo-manager"
 import type { Capture, RichCaptureInput } from "@/types"
 
 const capturesChangedEvent = "focusos:captures-changed"
@@ -15,7 +16,9 @@ function notifyCapturesChanged() {
 export function useCaptures(userId?: string) {
   const [captures, setCaptures] = useState<Capture[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const supabase = getSupabaseBrowser()
+  const pendingDiscardIds = useRef<Set<string>>(new Set())
 
   const refresh = useCallback(async () => {
     if (!supabase || !userId) {
@@ -23,12 +26,18 @@ export function useCaptures(userId?: string) {
       return
     }
     setLoading(true)
-    const { data } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("captures")
       .select("*")
       .eq("converted", false)
       .order("created_at", { ascending: false })
-    setCaptures((data ?? []) as Capture[])
+    if (fetchError) {
+      setError("Couldn't load captures.")
+    } else {
+      setError(null)
+      const rows = (data ?? []) as Capture[]
+      setCaptures(rows.filter((capture) => !pendingDiscardIds.current.has(capture.id)))
+    }
     setLoading(false)
   }, [supabase, userId])
 
@@ -95,7 +104,7 @@ export function useCaptures(userId?: string) {
 
     if (error || !capture) return
 
-    await supabase.from("capture_intake").insert({
+    const { error: intakeError } = await supabase.from("capture_intake").insert({
       user_id: userId,
       capture_id: capture.id,
       intake_type: "obsidian_note",
@@ -113,18 +122,36 @@ export function useCaptures(userId?: string) {
         media_items: mediaItems,
       },
       agent_status: "queued",
-      assistant_source: "Hermes",
     })
+
+    if (intakeError) {
+      console.error("Failed to create capture_intake row", intakeError)
+    }
 
     await refresh()
     notifyCapturesChanged()
   }
 
-  async function discardCapture(id: string) {
+  function discardCapture(id: string) {
     if (!supabase) return
-    setCaptures((items) => items.filter((capture) => capture.id !== id))
-    await supabase.from("captures").delete().eq("id", id)
-    notifyCapturesChanged()
+    const capture = captures.find((item) => item.id === id)
+    if (!capture) return
+
+    pendingDiscardIds.current.add(id)
+    setCaptures((items) => items.filter((item) => item.id !== id))
+    scheduleUndo(
+      id,
+      `"${capture.text.slice(0, 40)}${capture.text.length > 40 ? "…" : ""}"`,
+      async () => {
+        await supabase.from("captures").delete().eq("id", id)
+        pendingDiscardIds.current.delete(id)
+        notifyCapturesChanged()
+      },
+      () => {
+        pendingDiscardIds.current.delete(id)
+        setCaptures((items) => (items.some((item) => item.id === id) ? items : [capture, ...items]))
+      },
+    )
   }
 
   async function markConverted(id: string) {
@@ -134,5 +161,5 @@ export function useCaptures(userId?: string) {
     notifyCapturesChanged()
   }
 
-  return { captures, loading, addCapture, discardCapture, markConverted, refresh }
+  return { captures, loading, error, addCapture, discardCapture, markConverted, refresh }
 }

@@ -8,6 +8,7 @@ export function useExternalCommitments(userId?: string) {
   const [commitments, setCommitments] = useState<ExternalCommitment[]>([])
   const [sourceState, setSourceState] = useState<AssistantSourceState | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const supabase = getSupabaseBrowser()
 
   const refresh = useCallback(async () => {
@@ -17,12 +18,19 @@ export function useExternalCommitments(userId?: string) {
     }
 
     setLoading(true)
-    const [commitmentsResult, stateResult] = await Promise.all([
+    const [eventsResult, signalsResult, stateResult] = await Promise.all([
       supabase
         .from("external_commitments")
         .select("*")
+        .eq("source", "google_calendar")
         .order("starts_at", { ascending: true, nullsFirst: false })
-        .order("due_date", { ascending: true, nullsFirst: false }),
+        .limit(20),
+      supabase
+        .from("external_commitments")
+        .select("*")
+        .eq("source", "gmail")
+        .order("created_at", { ascending: false })
+        .limit(20),
       supabase
         .from("assistant_source_states")
         .select("*")
@@ -30,7 +38,15 @@ export function useExternalCommitments(userId?: string) {
         .maybeSingle(),
     ])
 
-    setCommitments((commitmentsResult.data ?? []) as ExternalCommitment[])
+    if (eventsResult.error || signalsResult.error) {
+      setError("Couldn't load calendar and inbox signals.")
+    } else {
+      setError(null)
+      setCommitments([
+        ...((eventsResult.data ?? []) as ExternalCommitment[]),
+        ...((signalsResult.data ?? []) as ExternalCommitment[]),
+      ])
+    }
     setSourceState((stateResult.data ?? null) as AssistantSourceState | null)
     setLoading(false)
   }, [supabase, userId])
@@ -77,9 +93,9 @@ export function useExternalCommitments(userId?: string) {
 
   const upcomingEvents = useMemo(
     () =>
-      commitments.filter(
-        (item) => item.source === "google_calendar" && Boolean(item.starts_at),
-      ),
+      commitments
+        .filter((item) => item.source === "google_calendar" && Boolean(item.starts_at))
+        .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? "")),
     [commitments],
   )
 
@@ -88,12 +104,23 @@ export function useExternalCommitments(userId?: string) {
     [commitments],
   )
 
+  const dismiss = useCallback(
+    async (id: string) => {
+      if (!supabase) return
+      await supabase.from("external_commitments").delete().eq("id", id)
+      await refresh()
+    },
+    [supabase, refresh],
+  )
+
   return {
     commitments,
     upcomingEvents,
     inboxSignals,
     sourceState,
     loading,
+    error,
     refresh,
+    dismiss,
   }
 }

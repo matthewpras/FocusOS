@@ -5,6 +5,7 @@ import { BookOpenText, CheckSquare, LoaderCircle, Sparkles, Trash2 } from "lucid
 import { useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { CaptureComposer } from "@/components/capture-composer"
+import { ErrorBanner } from "@/components/error-banner"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -81,19 +82,20 @@ export default function CapturePage() {
   return (
     <AppShell>
       <PageHeader title="Hermes inbox" detail="Capture notes, screenshots, and links for Obsidian triage." />
+      {captures.error ? <ErrorBanner message={captures.error} onRetry={captures.refresh} /> : null}
       {obsidian.status ? (
-        <section className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-white/70">
-          <span className="font-medium text-white">Obsidian:</span> {obsidian.status.message}
+        <section className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] px-4 py-3 text-sm text-[var(--today-muted)]">
+          <span className="font-medium text-[var(--today-ink)]">Obsidian:</span> {obsidian.status.message}
         </section>
       ) : null}
       {obsidian.error ? (
-        <section className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <section role="alert" className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           {obsidian.error}
         </section>
       ) : null}
-      <section className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-4">
-        <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
-          <Sparkles className="size-4 text-[var(--accent-blue)]" />
+      <section className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4 text-[var(--today-ink)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]">
+        <div className="mb-4 flex items-center gap-2 text-sm font-medium">
+          <Sparkles className="size-4 text-[var(--today-blue)]" />
           Queue for Hermes
         </div>
         <CaptureComposer onSave={captures.addCapture} />
@@ -104,14 +106,14 @@ export default function CapturePage() {
           return (
             <section
               key={capture.id}
-              className="grid gap-4 rounded-lg border border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur-md"
+              className="grid gap-4 rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4 text-[var(--today-ink)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-white/75">
+                <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6">
                   {capture.text}
                 </p>
                 {capture.obsidian_export_status ? (
-                  <span className="w-fit rounded-md border border-white/[0.08] px-2 py-1 text-xs text-white/50">
+                  <span className="w-fit rounded-md border border-[var(--today-line)] px-2 py-1 text-xs text-[var(--today-muted)]">
                     Obsidian {capture.obsidian_export_status}
                   </span>
                 ) : null}
@@ -122,7 +124,7 @@ export default function CapturePage() {
                   value={draft.priority}
                   onValueChange={(value) => updateDraft(capture.id, { priority: value as Priority })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -138,7 +140,7 @@ export default function CapturePage() {
                   value={draft.category}
                   onValueChange={(value) => updateDraft(capture.id, { category: value as Category })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Category">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -151,17 +153,19 @@ export default function CapturePage() {
                 </Select>
 
                 <Input
+                  aria-label="Due date"
                   type="date"
                   value={draft.dueDate}
                   onChange={(event) => updateDraft(capture.id, { dueDate: event.target.value })}
-                  className="border-white/[0.08] bg-black/20"
+                  className="border-[var(--today-line)] bg-[var(--today-panel)]"
                 />
 
                 <Input
+                  aria-label="Obsidian folder"
                   value={draft.obsidianTarget}
                   onChange={(event) => updateDraft(capture.id, { obsidianTarget: event.target.value })}
                   placeholder="Obsidian folder"
-                  className="border-white/[0.08] bg-black/20"
+                  className="border-[var(--today-line)] bg-[var(--today-panel)]"
                 />
 
                 <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
@@ -190,6 +194,7 @@ export default function CapturePage() {
                     size="icon"
                     variant="ghost"
                     aria-label="Discard capture"
+                    className="size-11"
                     onClick={() => captures.discardCapture(capture.id)}
                   >
                     <Trash2 className="size-4" />
@@ -198,7 +203,7 @@ export default function CapturePage() {
               </div>
 
               {capture.obsidian_export_path ? (
-                <p className="truncate text-xs text-white/40">
+                <p className="truncate text-xs text-[var(--today-muted)]">
                   Last export: {capture.obsidian_export_path}
                 </p>
               ) : null}
@@ -206,22 +211,22 @@ export default function CapturePage() {
           )
         })}
         {!captures.captures.length ? (
-          <section className="rounded-lg border border-dashed border-white/[0.12] p-10 text-center text-sm text-white/45">
-            Inbox empty. Use plus button or Cmd+N.
+          <section className="rounded-lg border border-dashed border-[var(--today-line)] p-10 text-center text-sm text-[var(--today-muted)]">
+            Inbox is empty. Use the plus button or Cmd+N.
           </section>
         ) : null}
         {obsidian.lastSyncedPath ? (
-          <section className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+          <section className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] px-4 py-3 text-sm text-[var(--today-muted)]">
             Last Obsidian export: {obsidian.lastSyncedPath}
           </section>
         ) : null}
         {obsidian.lastMarkdown ? (
-          <section className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
-            <p className="text-sm font-medium text-white">Markdown ready for Obsidian</p>
+          <section className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4 text-[var(--today-ink)]">
+            <p className="text-sm font-medium">Markdown ready for Obsidian</p>
             <textarea
               readOnly
               value={obsidian.lastMarkdown}
-              className="mt-3 min-h-32 w-full resize-y rounded-md border border-white/[0.08] bg-black/30 p-3 text-sm text-white/70"
+              className="mt-3 min-h-32 w-full resize-y rounded-md border border-[var(--today-line)] bg-[var(--today-panel-muted)] p-3 text-sm text-[var(--today-muted)]"
             />
           </section>
         ) : null}

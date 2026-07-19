@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
+import { scheduleUndo } from "@/lib/undo-manager"
 import type { Category, Priority, Task } from "@/types"
 
 export type NewTaskInput = {
@@ -15,7 +16,9 @@ export type NewTaskInput = {
 export function useTasks(userId?: string) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const supabase = getSupabaseBrowser()
+  const pendingDeleteIds = useRef<Set<string>>(new Set())
 
   const refresh = useCallback(async () => {
     if (!supabase || !userId) {
@@ -23,11 +26,17 @@ export function useTasks(userId?: string) {
       return
     }
     setLoading(true)
-    const { data } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false })
-    setTasks((data ?? []) as Task[])
+    if (fetchError) {
+      setError("Couldn't load tasks.")
+    } else {
+      setError(null)
+      const rows = (data ?? []) as Task[]
+      setTasks(rows.filter((task) => !pendingDeleteIds.current.has(task.id)))
+    }
     setLoading(false)
   }, [supabase, userId])
 
@@ -80,10 +89,25 @@ export function useTasks(userId?: string) {
     await refresh()
   }
 
-  async function deleteTask(id: string) {
+  function deleteTask(id: string) {
     if (!supabase) return
-    setTasks((items) => items.filter((task) => task.id !== id))
-    await supabase.from("tasks").delete().eq("id", id)
+    const task = tasks.find((item) => item.id === id)
+    if (!task) return
+
+    pendingDeleteIds.current.add(id)
+    setTasks((items) => items.filter((item) => item.id !== id))
+    scheduleUndo(
+      id,
+      `"${task.text}"`,
+      async () => {
+        await supabase.from("tasks").delete().eq("id", id)
+        pendingDeleteIds.current.delete(id)
+      },
+      () => {
+        pendingDeleteIds.current.delete(id)
+        setTasks((items) => (items.some((item) => item.id === id) ? items : [task, ...items]))
+      },
+    )
   }
 
   const today = format(new Date(), "yyyy-MM-dd")
@@ -98,5 +122,5 @@ export function useTasks(userId?: string) {
     [tasks, today],
   )
 
-  return { tasks, loading, stats, addTask, updateTask, deleteTask, refresh }
+  return { tasks, loading, error, stats, addTask, updateTask, deleteTask, refresh }
 }

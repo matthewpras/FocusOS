@@ -328,6 +328,55 @@ export async function logDecision(
   return data.id as string
 }
 
+export async function upsertExternalCommitment(
+  context: WriteContext,
+  input: ProvenanceInput & {
+    source: "google_calendar" | "gmail"
+    sourceId: string
+    title: string
+    details?: string | null
+    startsAt?: string | null
+    dueDate?: string | null
+    actionHint?: string | null
+    payload?: Record<string, unknown>
+  },
+) {
+  const payload = {
+    user_id: context.userId,
+    source: input.source,
+    source_id: input.sourceId,
+    title: input.title,
+    details: input.details ?? null,
+    starts_at: input.startsAt ?? null,
+    due_date: input.dueDate ?? null,
+    action_hint: input.actionHint ?? null,
+    payload: input.payload ?? {},
+    ...provenance(context, {
+      sourceKind: input.source === "google_calendar" ? "calendar_sync" : "gmail_sync",
+      ...input,
+    }),
+  }
+
+  const { data, error } = await context.supabase
+    .from("external_commitments")
+    .upsert(payload, { onConflict: "user_id,source,source_id" })
+    .select("id")
+    .single()
+
+  if (error) throw error
+
+  await logAgentEvent(context, {
+    eventType: "write",
+    targetTable: "external_commitments",
+    targetId: data.id,
+    action: "upsert_external_commitment",
+    summary: `Upserted external commitment: ${input.title}`,
+    payload,
+  })
+
+  return data.id as string
+}
+
 export async function createSchoolItem(
   context: WriteContext,
   input: ProvenanceInput & {

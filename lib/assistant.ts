@@ -9,6 +9,7 @@ import type {
   Task,
 } from "@/types"
 import { getSupabaseServerAdmin } from "@/lib/supabase-server"
+import { ASSISTANT_MODEL, synthesizeAssistantBrief } from "@/lib/openrouter"
 
 type SourceState = "connected" | "skipped" | "failed"
 
@@ -485,41 +486,6 @@ async function ensureTask(
   return true
 }
 
-async function ensureCapture(
-  userId: string,
-  capture: {
-    text: string
-    assistantKey: string
-    assistantSource: string
-  },
-) {
-  const supabase = getSupabaseServerAdmin()
-  if (!supabase) return false
-
-  const existing = await supabase
-    .from("captures")
-    .select("id,text")
-    .eq("user_id", userId)
-    .eq("assistant_key", capture.assistantKey)
-    .maybeSingle()
-
-  if (existing.data) {
-    if (existing.data.text === capture.text) return false
-    await supabase.from("captures").update({ text: capture.text }).eq("id", existing.data.id)
-    return true
-  }
-
-  await supabase.from("captures").insert({
-    user_id: userId,
-    text: capture.text,
-    assistant_key: capture.assistantKey,
-    assistant_source: capture.assistantSource,
-    created_by_assistant: true,
-  })
-
-  return true
-}
-
 async function ensureHabit(
   userId: string,
   habit: {
@@ -616,15 +582,11 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     .map((source) => source.note)
 
   for (const commitment of commitments) {
-    if (commitment.captureOnly) {
-      const changed = await ensureCapture(userId, {
-        text: `Review: ${commitment.title}`,
-        assistantKey: `${commitment.source}:${commitment.sourceId}:capture`,
-        assistantSource: commitment.source,
-      })
-      if (changed) changes.push(`Inbox updated from ${commitment.source}: ${commitment.title}`)
-      continue
-    }
+    // Non-actionable commitments (e.g. low-priority gmail messages) already live in
+    // external_commitments via upsertExternalCommitments() above, surfaced on the Calendar
+    // page's "Inbox follow-ups" panel. Captures are Matthew's own typed-in thoughts for
+    // Hermes's end-of-day summary, not a second copy of synced email/calendar noise.
+    if (commitment.captureOnly) continue
 
     if (commitment.actionable) {
       const changed = await ensureTask(userId, {
@@ -716,14 +678,43 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
       ? `Assistant ready. ${topPriorities.length} priorities, ${meetingCountToday} calendar commitments, ${captures.length} inbox items in play.`
       : `Assistant checked sources. ${meetingCountToday} calendar commitments and no urgent task reshuffle.`
 
+  const llmBrief = await synthesizeAssistantBrief({
+    today,
+    tasks: tasks
+      .filter((task) => !task.completed)
+      .map((task) => ({
+        text: task.text,
+        priority: task.priority,
+        due_date: task.due_date,
+        completed: task.completed,
+      })),
+    captures: captures.map((capture) => ({ text: capture.text })),
+    commitments: commitments.map((item) => ({
+      title: item.title,
+      startsAt: item.startsAt,
+      dueDate: item.dueDate,
+      source: item.source,
+    })),
+    overdueCount: overdueTasks.length,
+    meetingCountToday,
+    firstFocusBlock: focus.firstFocusBlock,
+    sourceErrors: errors,
+    fallback: { summary, topPriorities, risks, nextActions },
+  })
+
+  const finalSummary = llmBrief?.summary ?? summary
+  const finalTopPriorities = llmBrief?.topPriorities ?? topPriorities
+  const finalRisks = llmBrief?.risks ?? risks
+  const finalNextActions = llmBrief?.nextActions ?? nextActions
+
   const noMeaningfulChange =
     changes.length === 0 &&
     compareBriefs(latestBrief, {
-      summary,
-      topPriorities,
+      summary: finalSummary,
+      topPriorities: finalTopPriorities,
       firstFocusBlock: focus.firstFocusBlock,
-      risks,
-      nextActions,
+      risks: finalRisks,
+      nextActions: finalNextActions,
     })
 
   const status: AssistantRunStatus =
@@ -741,7 +732,7 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
       user_id: userId,
       status,
       trigger_source: triggerSource,
-      summary,
+      summary: finalSummary,
       changes,
       errors,
       sources: {
@@ -762,11 +753,11 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     await supabase.from("assistant_briefs").insert({
       user_id: userId,
       run_id: runData.id,
-      summary,
-      top_priorities: topPriorities,
+      summary: finalSummary,
+      top_priorities: finalTopPriorities,
       first_focus_block: focus.firstFocusBlock,
-      risks,
-      next_actions: nextActions,
+      risks: finalRisks,
+      next_actions: finalNextActions,
       focus_note: focus.focusNote,
       changed: changes.length > 0,
     })
@@ -786,14 +777,27 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     error_text: errors[0] ?? null,
   })
 
+  await supabase.from("agent_events").insert({
+    user_id: userId,
+    agent_name: "Hermes",
+    run_id: runData.id,
+    event_type: "assistant_run",
+    action: llmBrief ? "generate_brief_llm" : "generate_brief_fallback",
+    status: status === "failed" ? "failed" : status === "partial_failure" ? "warning" : "success",
+    summary: llmBrief
+      ? `Brief generated via ${ASSISTANT_MODEL}.`
+      : "Brief generated via rule-based fallback (no OpenRouter key or call failed).",
+    error_text: errors[0] ?? null,
+  })
+
   return {
     status,
-    summary,
-    topPriorities,
+    summary: finalSummary,
+    topPriorities: finalTopPriorities,
     firstFocusBlock: focus.firstFocusBlock,
     focusNote: focus.focusNote,
-    risks,
-    nextActions,
+    risks: finalRisks,
+    nextActions: finalNextActions,
     changes,
     errors,
     sources: {

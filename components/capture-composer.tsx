@@ -132,6 +132,7 @@ export function CaptureComposer({
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
       <Textarea
+        aria-label="Capture note"
         autoFocus={autoFocus}
         value={note}
         onChange={(event) => setNote(event.target.value)}
@@ -142,11 +143,12 @@ export function CaptureComposer({
           }
         }}
         placeholder="Note, task, link context, or screenshot context..."
-        className={compact ? "min-h-32 resize-none border-white/[0.08] bg-white/[0.05]" : "min-h-40 resize-y border-white/[0.08] bg-black/20"}
+        className={compact ? "min-h-32 resize-none border-[var(--today-line)] bg-[var(--today-panel)]" : "min-h-40 resize-y border-[var(--today-line)] bg-[var(--today-panel)]"}
       />
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <Input
+          aria-label="Reference link URL"
           value={linkInput}
           onChange={(event) => setLinkInput(event.target.value)}
           onKeyDown={(event) => {
@@ -156,7 +158,7 @@ export function CaptureComposer({
             }
           }}
           placeholder="TikTok, YouTube, or reference URL"
-          className="border-white/[0.08] bg-black/20"
+          className="border-[var(--today-line)] bg-[var(--today-panel)]"
         />
         <Button type="button" variant="secondary" className="gap-2" onClick={addLink}>
           <Link2 className="size-4" />
@@ -168,13 +170,14 @@ export function CaptureComposer({
         {links.map((link) => (
           <span
             key={link.url}
-            className="inline-flex max-w-full items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs text-white/70"
+            className="inline-flex max-w-full items-center gap-2 rounded-md border border-[var(--today-line)] bg-[var(--today-panel)] px-2 py-1 text-xs text-[var(--today-muted)]"
           >
-            <span className="shrink-0 text-white/45">{link.kind}</span>
+            <span className="shrink-0 text-[var(--today-muted)]">{link.kind}</span>
             <span className="truncate">{link.url}</span>
             <button
               type="button"
               aria-label="Remove link"
+              className="-m-1 p-1"
               onClick={() => setLinks((items) => items.filter((item) => item.url !== link.url))}
             >
               <X className="size-3" />
@@ -188,17 +191,18 @@ export function CaptureComposer({
           {mediaItems.map((item) => (
             <div
               key={`${item.name}-${item.size}`}
-              className="relative overflow-hidden rounded-lg border border-white/[0.08] bg-black/30"
+              className="relative overflow-hidden rounded-lg border border-[var(--today-line)] bg-[var(--today-panel-muted)]"
             >
               {item.data_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={item.data_url} alt={item.name} className="aspect-video w-full object-cover" />
               ) : null}
-              <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-white/60">
+              <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-[var(--today-muted)]">
                 <span className="truncate">{item.name}</span>
                 <button
                   type="button"
                   aria-label="Remove image"
+                  className="-m-1 p-1"
                   onClick={() =>
                     setMediaItems((items) =>
                       items.filter((candidate) => candidate !== item),
@@ -215,10 +219,11 @@ export function CaptureComposer({
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
         <Input
+          aria-label="Obsidian folder"
           value={obsidianTarget}
           onChange={(event) => setObsidianTarget(event.target.value)}
           placeholder="Obsidian folder"
-          className="border-white/[0.08] bg-black/20"
+          className="border-[var(--today-line)] bg-[var(--today-panel)]"
         />
         <input
           ref={fileInputRef}
@@ -243,7 +248,7 @@ export function CaptureComposer({
         </Button>
       </div>
 
-      {error ? <p className="text-sm text-amber-200">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-amber-200">{error}</p> : null}
 
       {onCancel ? (
         <div className="flex justify-end">

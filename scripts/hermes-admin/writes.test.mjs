@@ -37,6 +37,10 @@ function createFakeSupabase() {
             },
           }
         },
+        upsert(payload, options) {
+          calls.push({ table, method: "upsert", payload, options })
+          return resultChain({ id: `${table}-id` })
+        },
       }
     },
   }
@@ -114,6 +118,33 @@ test("upsertTask updates existing tasks and logs audit event", async () => {
   assert.equal(audit.payload.target_id, "task-1")
 })
 
+test("upsertExternalCommitment upserts on user/source/source_id and logs audit event", async () => {
+  const supabase = createFakeSupabase()
+  const id = await writes.upsertExternalCommitment(context(supabase), {
+    source: "google_calendar",
+    sourceId: "gcal-event-1",
+    title: "Advisor meeting",
+    startsAt: "2026-07-20T15:00:00Z",
+  })
+
+  assert.equal(id, "external_commitments-id")
+
+  const upsert = supabase.calls.find(
+    (call) => call.table === "external_commitments" && call.method === "upsert",
+  )
+  assert.equal(upsert.payload.source, "google_calendar")
+  assert.equal(upsert.payload.source_id, "gcal-event-1")
+  assert.equal(upsert.payload.starts_at, "2026-07-20T15:00:00Z")
+  assert.equal(upsert.payload.source_kind, "calendar_sync")
+  assert.deepEqual(upsert.options, { onConflict: "user_id,source,source_id" })
+
+  const audit = supabase.calls.find(
+    (call) => call.table === "agent_events" && call.method === "insert",
+  )
+  assert.equal(audit.payload.action, "upsert_external_commitment")
+  assert.equal(audit.payload.target_id, "external_commitments-id")
+})
+
 test("MVP helper exports cover Hermes local write contract", () => {
   for (const helperName of [
     "logAgentEvent",
@@ -124,6 +155,7 @@ test("MVP helper exports cover Hermes local write contract", () => {
     "writeBoardRecommendation",
     "logDecision",
     "createSchoolItem",
+    "upsertExternalCommitment",
   ]) {
     assert.equal(typeof writes[helperName], "function", helperName)
   }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Check } from "lucide-react"
+import { Check, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Task } from "@/types"
 import { cn } from "@/lib/utils"
@@ -9,6 +9,7 @@ import { getTodayTaskPreview } from "@/lib/today-home"
 type TodayTaskListProps = {
   tasks: Task[]
   onComplete: (task: Task) => void
+  onSnooze: (task: Task) => void
 }
 
 function taskMeta(task: Task) {
@@ -27,7 +28,7 @@ function dueLabel(task: Task) {
   return task.due_date
 }
 
-export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
+export function TodayTaskList({ tasks, onComplete, onSnooze }: TodayTaskListProps) {
   const { visibleTasks, hiddenTaskCount } = getTodayTaskPreview(tasks)
 
   return (
@@ -52,36 +53,52 @@ export function TodayTaskList({ tasks, onComplete }: TodayTaskListProps) {
       {tasks.length ? (
         <>
           <ul className="divide-y divide-[var(--today-line)]">
-            {visibleTasks.map((task) => (
-              <li key={task.id} className="flex min-w-0 items-start gap-3 px-4 py-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Complete ${task.text}`}
-                  onClick={() => onComplete(task)}
-                  className="mt-0.5 size-7 rounded-full border border-[var(--today-line)] text-transparent hover:border-[var(--today-blue)] hover:bg-[oklch(0.24_0.07_255)] hover:text-[oklch(0.86_0.07_245)] focus-visible:ring-[var(--today-blue)]"
-                >
-                  <Check className="size-3.5" />
-                </Button>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{task.text}</p>
-                  <p className="mt-1 truncate text-xs capitalize text-[var(--today-muted)]">
-                    {taskMeta(task)}
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-1 text-xs font-medium",
-                    dueLabel(task) === "Overdue"
-                      ? "border border-red-300/20 bg-red-400/10 text-red-200"
-                      : "border border-white/10 bg-[var(--today-panel-muted)] text-[var(--today-muted)]",
-                  )}
-                >
-                  {dueLabel(task)}
-                </span>
-              </li>
-            ))}
+            {visibleTasks.map((task) => {
+              const label = dueLabel(task)
+              const canSnooze = label === "Overdue" || label === "Today"
+              return (
+                <li key={task.id} className="flex min-w-0 items-start gap-3 px-4 py-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Complete ${task.text}`}
+                    onClick={() => onComplete(task)}
+                    className="mt-0.5 size-7 rounded-full border border-[var(--today-line)] text-transparent hover:border-[var(--today-blue)] hover:bg-[oklch(0.24_0.07_255)] hover:text-[oklch(0.86_0.07_245)] focus-visible:ring-[var(--today-blue)]"
+                  >
+                    <Check className="size-3.5" />
+                  </Button>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{task.text}</p>
+                    <p className="mt-1 truncate text-xs capitalize text-[var(--today-muted)]">
+                      {taskMeta(task)}
+                    </p>
+                  </div>
+                  {canSnooze ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Snooze "${task.text}" to tomorrow`}
+                      onClick={() => onSnooze(task)}
+                      className="mt-0.5 size-7 shrink-0 text-[var(--today-muted)] hover:text-[var(--today-ink)]"
+                    >
+                      <CalendarClock className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-1 text-xs font-medium",
+                      label === "Overdue"
+                        ? "border border-red-300/20 bg-red-400/10 text-red-200"
+                        : "border border-white/10 bg-[var(--today-panel-muted)] text-[var(--today-muted)]",
+                    )}
+                  >
+                    {label}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
           {hiddenTaskCount > 0 ? (
             <div className="border-t border-[var(--today-line)] px-4 py-3 text-xs font-medium text-[var(--today-muted)]">

@@ -166,3 +166,60 @@ export type AssistantSourceState = {
   error_text: string | null
   updated_at: string
 }
+
+export type AgentName = "Hermes" | "Nova" | "Atlas" | "Pulse" | "Dev"
+
+export type AgentEvent = {
+  id: string
+  user_id: string
+  agent_name: AgentName
+  run_id: string | null
+  event_type: string
+  target_table: string | null
+  target_id: string | null
+  action: string
+  status: "success" | "warning" | "failed"
+  summary: string | null
+  payload: Record<string, unknown>
+  error_text: string | null
+  created_at: string
+}
+
+export type BoardRecommendationStatus = "active" | "accepted" | "dismissed" | "archived"
+
+export type BoardRecommendation = {
+  id: string
+  user_id: string
+  domain_id: string | null
+  project_id: string | null
+  agent_name: AgentName
+  title: string
+  summary: string
+  recommendation_type: "priority" | "risk" | "decision" | "review" | "school" | "finance" | "systems" | "health"
+  priority: Priority
+  status: BoardRecommendationStatus
+  supporting_points: unknown[]
+  suggested_actions: unknown[]
+  expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProjectStatus = "active" | "paused" | "completed" | "archived"
+
+export type Project = {
+  id: string
+  user_id: string
+  domain_id: string | null
+  name: string
+  slug: string
+  description: string | null
+  status: ProjectStatus
+  priority: Priority
+  target_date: string | null
+  last_touched_at: string | null
+  slipping: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}

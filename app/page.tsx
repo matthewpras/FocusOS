@@ -2,6 +2,7 @@
 
 import { useMemo } from "react"
 import { useRouter } from "next/navigation"
+import { addDays, format } from "date-fns"
 import { AppShell } from "@/components/app-shell"
 import { TodayHomeView } from "@/components/today-home/today-home-view"
 import { useAssistant } from "@/hooks/useAssistant"
@@ -68,6 +69,10 @@ export default function Home() {
     void tasks.updateTask(task.id, { completed: true })
   }
 
+  function snoozeTask(task: Task) {
+    void tasks.updateTask(task.id, { due_date: format(addDays(now, 1), "yyyy-MM-dd") })
+  }
+
   function runHermes() {
     void assistant.runNow()
   }
@@ -87,6 +92,7 @@ export default function Home() {
         scheduleRows={scheduleRows}
         assistantRunning={assistant.running}
         onCompleteTask={completeTask}
+        onSnoozeTask={snoozeTask}
         onQuickCapture={openQuickCapture}
         onRunHermes={runHermes}
         onOpenInbox={openInbox}

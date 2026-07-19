@@ -38,6 +38,15 @@ yarn-error.log*
 # vercel
 .vercel
 
+# supabase CLI local state
+/supabase/.temp/
+
+# local scratch files, not project artifacts
+/.tmp-forms/
+
+# Claude Code local state (permissions, worktrees, dev-server launch config)
+/.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

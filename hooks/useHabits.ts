@@ -1,17 +1,20 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format, subDays } from "date-fns"
 import { getSupabaseBrowser } from "@/lib/supabase-browser"
 import { computeCurrentStreak, computeLongestStreak } from "@/lib/streak"
+import { scheduleUndo } from "@/lib/undo-manager"
 import type { Habit, HabitLog, HabitWithStats } from "@/types"
 
 export function useHabits(userId?: string) {
   const [habits, setHabits] = useState<Habit[]>([])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const supabase = getSupabaseBrowser()
   const today = format(new Date(), "yyyy-MM-dd")
+  const pendingArchiveIds = useRef<Set<string>>(new Set())
 
   const refresh = useCallback(async () => {
     if (!supabase || !userId) {
@@ -20,7 +23,7 @@ export function useHabits(userId?: string) {
     }
     setLoading(true)
     const start = format(subDays(new Date(), 90), "yyyy-MM-dd")
-    const [{ data: habitsData }, { data: logsData }] = await Promise.all([
+    const [{ data: habitsData, error: habitsError }, { data: logsData, error: logsError }] = await Promise.all([
       supabase
         .from("habits")
         .select("*")
@@ -32,8 +35,14 @@ export function useHabits(userId?: string) {
         .gte("logged_date", start)
         .order("logged_date", { ascending: false }),
     ])
-    setHabits((habitsData ?? []) as Habit[])
-    setLogs((logsData ?? []) as HabitLog[])
+    if (habitsError || logsError) {
+      setError("Couldn't load habits.")
+    } else {
+      setError(null)
+      const rows = (habitsData ?? []) as Habit[]
+      setHabits(rows.filter((habit) => !pendingArchiveIds.current.has(habit.id)))
+      setLogs((logsData ?? []) as HabitLog[])
+    }
     setLoading(false)
   }, [supabase, userId])
 
@@ -115,10 +124,25 @@ export function useHabits(userId?: string) {
     await refresh()
   }
 
-  async function archiveHabit(id: string) {
+  function archiveHabit(id: string) {
     if (!supabase) return
-    setHabits((items) => items.filter((habit) => habit.id !== id))
-    await supabase.from("habits").update({ archived: true }).eq("id", id)
+    const habit = habits.find((item) => item.id === id)
+    if (!habit) return
+
+    pendingArchiveIds.current.add(id)
+    setHabits((items) => items.filter((item) => item.id !== id))
+    scheduleUndo(
+      id,
+      `"${habit.name}"`,
+      async () => {
+        await supabase.from("habits").update({ archived: true }).eq("id", id)
+        pendingArchiveIds.current.delete(id)
+      },
+      () => {
+        pendingArchiveIds.current.delete(id)
+        setHabits((items) => (items.some((item) => item.id === id) ? items : [habit, ...items]))
+      },
+    )
   }
 
   const habitsWithStats = useMemo<HabitWithStats[]>(
@@ -139,6 +163,7 @@ export function useHabits(userId?: string) {
   return {
     habits: habitsWithStats,
     loading,
+    error,
     addHabit,
     toggleHabit,
     archiveHabit,

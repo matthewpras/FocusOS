@@ -2,6 +2,7 @@
 
 import { Trash2 } from "lucide-react"
 import { AppShell } from "@/components/app-shell"
+import { ErrorBanner } from "@/components/error-banner"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +13,7 @@ import { useState } from "react"
 
 export default function HabitsPage() {
   const { user } = useAuth()
-  const { habits, addHabit, toggleHabit, archiveHabit } = useHabits(user?.id)
+  const { habits, error, addHabit, toggleHabit, archiveHabit, refresh } = useHabits(user?.id)
   const [name, setName] = useState("")
   const [icon, setIcon] = useState("✓")
   const [color, setColor] = useState("#60A5FA")
@@ -25,18 +26,22 @@ export default function HabitsPage() {
   return (
     <AppShell>
       <PageHeader title="Habits" detail="Track small daily signals and keep streaks visible." />
-      <section className="grid gap-3 rounded-lg border border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur-md sm:grid-cols-[1fr_80px_90px_auto]">
-        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="New habit" className="border-white/[0.08] bg-black/20" />
-        <Input value={icon} onChange={(event) => setIcon(event.target.value.slice(0, 2))} className="border-white/[0.08] bg-black/20" />
-        <Input type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-10 border-white/[0.08] bg-black/20 p-1" />
+      {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+      <section className="grid gap-3 rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.2)] sm:grid-cols-[1fr_80px_90px_auto]">
+        <Input aria-label="New habit name" value={name} onChange={(event) => setName(event.target.value)} placeholder="New habit" className="border-[var(--today-line)] bg-[var(--today-panel)]" />
+        <Input aria-label="Habit icon" value={icon} onChange={(event) => setIcon(event.target.value.slice(0, 2))} className="border-[var(--today-line)] bg-[var(--today-panel)]" />
+        <Input aria-label="Habit color" type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-10 border-[var(--today-line)] bg-[var(--today-panel)] p-1" />
         <Button onClick={createHabit}>Add</Button>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {habits.map((habit) => (
-          <section key={habit.id} className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-md">
+          <section key={habit.id} className="rounded-lg border border-[var(--today-line)] bg-[var(--today-surface)] p-5 text-[var(--today-ink)] shadow-[0_18px_44px_rgb(0_0_0/0.2)]">
             <div className="mb-5 flex items-start gap-3">
               <button
+                type="button"
+                aria-pressed={habit.completedToday}
+                aria-label={`${habit.name}: ${habit.completedToday ? "done" : "not done"} today, toggle`}
                 className="grid size-12 place-items-center rounded-lg text-lg"
                 style={{ backgroundColor: `${habit.color}22`, color: habit.color }}
                 onClick={() => toggleHabit(habit.id)}
@@ -44,12 +49,18 @@ export default function HabitsPage() {
                 {habit.icon}
               </button>
               <div className="min-w-0 flex-1">
-                <h2 className="truncate font-semibold text-white">{habit.name}</h2>
-                <p className="text-sm text-white/45">
+                <h2 className="truncate font-semibold">{habit.name}</h2>
+                <p className="text-sm text-[var(--today-muted)]">
                   {habit.currentStreak} day current / {habit.longestStreak} best
                 </p>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => archiveHabit(habit.id)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Archive "${habit.name}"`}
+                className="size-11"
+                onClick={() => archiveHabit(habit.id)}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>
@@ -58,7 +69,7 @@ export default function HabitsPage() {
                 <div
                   key={day.date}
                   title={day.label}
-                  className="aspect-square rounded-[3px] border border-white/[0.05]"
+                  className="aspect-square rounded-[3px] border border-[var(--today-line)]"
                   style={{
                     backgroundColor: day.completed ? habit.color : "rgba(255,255,255,0.04)",
                   }}
@@ -68,8 +79,8 @@ export default function HabitsPage() {
           </section>
         ))}
         {!habits.length ? (
-          <section className="rounded-lg border border-dashed border-white/[0.12] p-8 text-sm text-white/45">
-            Add first habit.
+          <section className="rounded-lg border border-dashed border-[var(--today-line)] p-8 text-sm text-[var(--today-muted)]">
+            No habits yet. Add your first one above.
           </section>
         ) : null}
       </div>

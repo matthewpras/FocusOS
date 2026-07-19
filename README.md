@@ -38,6 +38,8 @@ GOOGLE_REFRESH_TOKEN=YOUR_GOOGLE_REFRESH_TOKEN
 GOOGLE_CALENDAR_ID=primary
 GOOGLE_GMAIL_QUERY=newer_than:2d (is:important OR label:starred OR category:primary)
 GOOGLE_TIMEZONE=America/New_York
+OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
+OPENROUTER_MODEL=anthropic/claude-haiku-4.5
 ```
 
 ## Private Deployment
@@ -77,7 +79,21 @@ Authorization: Bearer YOUR_CRON_SECRET
 - Add GitHub repository secret `CRON_SECRET` with the same value as Vercel `CRON_SECRET`.
 - Optional GitHub repository variable `FOCUS_OS_ASSISTANT_URL` can override the production endpoint.
 
-## Hermes Direct Supabase Admin
+## AI Brief and Chat (replaces the Hermes PC agent)
+
+`runAssistant()` (in `lib/assistant.ts`) does all the same calendar/Gmail sync and task/habit bookkeeping it always did, but the final brief (summary, top priorities, risks, next actions) is now synthesized by an LLM call through OpenRouter instead of hand-written rules.
+
+- Get an API key at [openrouter.ai](https://openrouter.ai), set `OPENROUTER_API_KEY` in `.env.local` and in Vercel project settings. Never commit the real key or put it in a `NEXT_PUBLIC_*` var.
+- `OPENROUTER_MODEL` is optional; defaults to `anthropic/claude-haiku-4.5`. Any OpenRouter-compatible model slug works — check current slugs and pricing at openrouter.ai/models.
+- If `OPENROUTER_API_KEY` is unset, or the OpenRouter call fails for any reason, `runAssistant()` falls back to the original rule-based synthesis automatically. A run never hard-fails because of the LLM step.
+- No new scheduling infra needed — the existing GitHub Actions cron (`.github/workflows/focusos-assistant.yml`, 5x/day) already drives this; it just triggers real reasoning now instead of string templates.
+- Every run logs one `agent_events` row (`agent_name: "Hermes"`, `action: generate_brief_llm` or `generate_brief_fallback`) so you can see in the Operations page whether a given run actually used the model or fell back.
+- `POST /api/assistant/chat` powers the in-app chat panel ("Chat with Hermes" in the sidebar or command palette, ⌘K). Same auth as `/api/assistant/run` (bearer access token, allowlisted email). The model can read tasks/captures/habits/calendar and create/update/complete tasks, create captures, toggle habits, and trigger a full run — all read/write actions log to `agent_events` the same way. `delete_task` and `discard_capture` are server-gated: the model can request them but the server won't execute until you tap Confirm in the chat UI.
+- Chat history is client-side only for now (clears on reload, no cross-device sync).
+
+This is the intended replacement for running Hermes on a second PC — once this is set up and working, the local Hermes process and `.env.hermes.local` can be retired. The direct-Supabase-admin path below still works if you want it for something else (e.g. a separate Discord bot), but it's no longer required for the daily brief or chat.
+
+## Hermes Direct Supabase Admin (optional, legacy path)
 
 Hermes runs from a trusted local PC and writes directly to Supabase with a local-only admin secret.
 
