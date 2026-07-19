@@ -21,7 +21,7 @@ type SourceReport = {
 }
 
 type Commitment = {
-  source: "google_calendar" | "gmail"
+  source: "google_calendar" | "gmail" | "google_drive"
   sourceId: string
   title: string
   details: string | null
@@ -235,7 +235,7 @@ function compareBriefs(
   )
 }
 
-function getGoogleAuthClient() {
+export function getGoogleAuthClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
@@ -407,6 +407,77 @@ async function fetchGmailCommitments() {
   }
 }
 
+async function fetchDriveCommitments(now: Date) {
+  const auth = getGoogleAuthClient()
+
+  if (!auth) {
+    return {
+      commitments: [] as Commitment[],
+      report: {
+        state: "skipped" as const,
+        syncedAt: null,
+        note: "Drive not configured.",
+        count: 0,
+      },
+    }
+  }
+
+  try {
+    const drive = google.drive({ version: "v3", auth })
+    const lookbackIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
+
+    const { data } = await drive.files.list({
+      q: `modifiedTime > '${lookbackIso}' and trashed = false`,
+      orderBy: "modifiedTime desc",
+      pageSize: 10,
+      fields: "files(id,name,modifiedTime,webViewLink,owners(displayName))",
+    })
+
+    const commitments: Commitment[] = (data.files ?? [])
+      .filter((file) => file.id && file.name)
+      .map((file) => {
+        const title = normalizeText(file.name!)
+        const actionable = feelsActionable(title)
+        return {
+          source: "google_drive",
+          sourceId: file.id!,
+          title,
+          details: file.owners?.[0]?.displayName ? `Owner: ${file.owners[0].displayName}` : null,
+          startsAt: null,
+          dueDate: null,
+          confidence: actionable ? 0.7 : 0.45,
+          actionHint: actionable ? "Create follow-up task" : "Review in Drive",
+          actionable,
+          captureOnly: !actionable,
+          payload: {
+            webViewLink: file.webViewLink ?? null,
+            modifiedTime: file.modifiedTime ?? null,
+          },
+        }
+      })
+
+    return {
+      commitments,
+      report: {
+        state: "connected" as const,
+        syncedAt: new Date().toISOString(),
+        note: `${commitments.length} recent Drive files checked.`,
+        count: commitments.length,
+      },
+    }
+  } catch (error) {
+    return {
+      commitments: [] as Commitment[],
+      report: {
+        state: "failed" as const,
+        syncedAt: null,
+        note: error instanceof Error ? error.message : "Drive fetch failed.",
+        count: 0,
+      },
+    }
+  }
+}
+
 async function upsertExternalCommitments(userId: string, commitments: Commitment[]) {
   const supabase = getSupabaseServerAdmin()
   if (!supabase || !commitments.length) return
@@ -568,16 +639,17 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
   const latestBrief = latestBriefResult.data as AssistantBrief | null
   const previousSourceState = sourceStateResult.data as AssistantSourceState | null
 
-  const [calendarResult, gmailResult] = await Promise.all([
+  const [calendarResult, gmailResult, driveResult] = await Promise.all([
     fetchCalendarCommitments(startedAt),
     fetchGmailCommitments(),
+    fetchDriveCommitments(startedAt),
   ])
 
-  const commitments = [...calendarResult.commitments, ...gmailResult.commitments]
+  const commitments = [...calendarResult.commitments, ...gmailResult.commitments, ...driveResult.commitments]
   await upsertExternalCommitments(userId, commitments)
 
   const changes: string[] = []
-  const errors = [calendarResult.report, gmailResult.report]
+  const errors = [calendarResult.report, gmailResult.report, driveResult.report]
     .filter((source) => source.state === "failed")
     .map((source) => source.note)
 
@@ -593,7 +665,9 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
         text:
           commitment.source === "gmail"
             ? `Email follow-up: ${commitment.title}`
-            : `Prepare: ${commitment.title}`,
+            : commitment.source === "google_drive"
+              ? `Follow up on file: ${commitment.title}`
+              : `Prepare: ${commitment.title}`,
         priority: commitment.source === "gmail" ? "high" : "medium",
         dueDate: commitment.dueDate ?? today,
         category: "work",
@@ -738,6 +812,7 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
       sources: {
         calendar: calendarResult.report,
         gmail: gmailResult.report,
+        drive: driveResult.report,
       },
       started_at: startedAt.toISOString(),
       finished_at: new Date().toISOString(),
@@ -767,6 +842,7 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     user_id: userId,
     calendar_last_synced_at: calendarResult.report.syncedAt,
     gmail_last_synced_at: gmailResult.report.syncedAt,
+    drive_last_synced_at: driveResult.report.syncedAt,
     last_successful_run_at:
       status === "success" || status === "no_change"
         ? new Date().toISOString()
@@ -803,6 +879,7 @@ export async function runAssistant(userId: string, triggerSource: AssistantTrigg
     sources: {
       calendar: calendarResult.report,
       gmail: gmailResult.report,
+      drive: driveResult.report,
     },
   } satisfies AssistantResult
 }

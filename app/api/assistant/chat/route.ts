@@ -3,14 +3,16 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/reso
 import { getBearerToken, verifyAccessToken } from "@/lib/server-auth"
 import { getSupabaseServerAdmin } from "@/lib/supabase-server"
 import { ASSISTANT_MODEL, getOpenRouterClient, stripJsonFences } from "@/lib/openrouter"
-import { runAssistant } from "@/lib/assistant"
+import { google } from "googleapis"
+import { getGoogleAuthClient, runAssistant } from "@/lib/assistant"
 import { computeCurrentStreak } from "@/lib/streak"
 
 const SYSTEM_PROMPT = `You are Hermes, Matthew's personal productivity assistant inside Focus OS.
 Chat with him directly and use the provided tools to read and act on his real tasks, captures, habits, and calendar — never invent data, always call a tool to check before answering questions about his state.
 Keep replies short and direct, no filler.
 Only call delete_task or discard_capture when Matthew has clearly asked to remove something. Always pass a short human-readable "label" for those two tools so he can see exactly what he's confirming.
-For every other action (create/update/complete tasks, create captures, toggle habits, run Hermes now) just do it and briefly confirm what happened.`
+For every other action (create/update/complete tasks, create captures, toggle habits, run Hermes now) just do it and briefly confirm what happened.
+When Matthew asks for a written deliverable (a brief, plan, or summary) saved somewhere he can keep it, use create_drive_deliverable and share the link.`
 
 const DESTRUCTIVE_TOOLS = new Set(["delete_task", "discard_capture"])
 const MAX_TOOL_ITERATIONS = 4
@@ -136,6 +138,25 @@ const tools: ChatCompletionTool[] = [
       name: "run_hermes_now",
       description: "Trigger a full assistant run right now (syncs calendar/gmail, regenerates the daily brief).",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_drive_deliverable",
+      description: "Save a finished write-up (brief, plan, summary) as a file in Matthew's Google Drive and return the link.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "File name, without extension." },
+          content: { type: "string", description: "Full text content of the deliverable." },
+          as_google_doc: {
+            type: "boolean",
+            description: "If true, saves as an editable Google Doc. If false/omitted, saves as a plain text file.",
+          },
+        },
+        required: ["name", "content"],
+      },
     },
   },
   {
@@ -304,6 +325,27 @@ async function executeTool(
     case "run_hermes_now": {
       const result = await runAssistant(userId, "manual")
       return { ok: true, summary: result.summary, topPriorities: result.topPriorities }
+    }
+    case "create_drive_deliverable": {
+      const auth = getGoogleAuthClient()
+      if (!auth) throw new Error("Google Drive isn't configured.")
+
+      const drive = google.drive({ version: "v3", auth })
+      const name = String(args.name ?? "Untitled").trim()
+      const content = String(args.content ?? "")
+      const asGoogleDoc = args.as_google_doc === true
+
+      const { data } = await drive.files.create({
+        requestBody: {
+          name,
+          mimeType: asGoogleDoc ? "application/vnd.google-apps.document" : "text/plain",
+        },
+        media: { mimeType: "text/plain", body: content },
+        fields: "id,webViewLink",
+      })
+
+      await logAgentEvent(supabase, userId, "create_drive_deliverable", "success", `Saved Drive deliverable via chat: ${name}`)
+      return { ok: true, webViewLink: data.webViewLink }
     }
     case "delete_task": {
       await supabase.from("tasks").delete().eq("id", args.id).eq("user_id", userId)

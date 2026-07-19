@@ -46,11 +46,12 @@ export default function Home() {
         overdueTaskCount: tasks.stats.overdue.length,
         todayTaskCount: todayTasks.length,
         eventCount: scheduleRows.length,
-        inboxCount: captures.captures.length + commitments.inboxSignals.length,
+        inboxCount: captures.captures.length + commitments.inboxSignals.length + commitments.driveSignals.length,
       }),
     [
       captures.captures.length,
       commitments.inboxSignals.length,
+      commitments.driveSignals.length,
       scheduleRows.length,
       tasks.stats.overdue.length,
       todayTasks.length,

@@ -18,7 +18,7 @@ export function useExternalCommitments(userId?: string) {
     }
 
     setLoading(true)
-    const [eventsResult, signalsResult, stateResult] = await Promise.all([
+    const [eventsResult, signalsResult, driveResult, stateResult] = await Promise.all([
       supabase
         .from("external_commitments")
         .select("*")
@@ -32,19 +32,26 @@ export function useExternalCommitments(userId?: string) {
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
+        .from("external_commitments")
+        .select("*")
+        .eq("source", "google_drive")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
         .from("assistant_source_states")
         .select("*")
         .eq("user_id", userId)
         .maybeSingle(),
     ])
 
-    if (eventsResult.error || signalsResult.error) {
-      setError("Couldn't load calendar and inbox signals.")
+    if (eventsResult.error || signalsResult.error || driveResult.error) {
+      setError("Couldn't load calendar, inbox, and Drive signals.")
     } else {
       setError(null)
       setCommitments([
         ...((eventsResult.data ?? []) as ExternalCommitment[]),
         ...((signalsResult.data ?? []) as ExternalCommitment[]),
+        ...((driveResult.data ?? []) as ExternalCommitment[]),
       ])
     }
     setSourceState((stateResult.data ?? null) as AssistantSourceState | null)
@@ -104,6 +111,11 @@ export function useExternalCommitments(userId?: string) {
     [commitments],
   )
 
+  const driveSignals = useMemo(
+    () => commitments.filter((item) => item.source === "google_drive"),
+    [commitments],
+  )
+
   const dismiss = useCallback(
     async (id: string) => {
       if (!supabase) return
@@ -117,6 +129,7 @@ export function useExternalCommitments(userId?: string) {
     commitments,
     upcomingEvents,
     inboxSignals,
+    driveSignals,
     sourceState,
     loading,
     error,

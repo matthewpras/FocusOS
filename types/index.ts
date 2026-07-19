@@ -137,7 +137,7 @@ export type AssistantBrief = {
   created_at: string
 }
 
-export type ExternalCommitmentSource = "google_calendar" | "gmail"
+export type ExternalCommitmentSource = "google_calendar" | "gmail" | "google_drive"
 
 export type ExternalCommitment = {
   id: string
@@ -159,6 +159,7 @@ export type AssistantSourceState = {
   user_id: string
   calendar_last_synced_at: string | null
   gmail_last_synced_at: string | null
+  drive_last_synced_at: string | null
   last_successful_run_at: string | null
   last_attempted_run_at: string | null
   next_suggested_run_at: string | null
